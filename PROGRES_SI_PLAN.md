@@ -23,8 +23,8 @@ lipsa lor produce `not_installed`, apoi descarcă singură cele 224.410.556 byte
 ale arhivei runtime de la furnizor. Pe telefon descărcarea a mers cu aproximativ
 28 MB/minut, adică peste 8 minute, în timp ce wrapper-ul oprește procesul după
 180 secunde. Fișierele parțiale `v3.3.3.download.<pid>.zip-*` nu se reiau între
-procese (63.631.360, 83.406.848 și 84.013.056 bytes în probe diferite), iar un
-attempt a eșuat separat cu `offline: result 3, HTTP 0`. Endpoint-ul era viu
+procese (63.631.360, 83.406.848 și 84.013.056 bytes în probe diferite), iar o
+încercare a eșuat separat cu `offline: result 3, HTTP 0`. Endpoint-ul era viu
 (302 către GitHub); problema era exclusiv locul în care pluginul caută runtime-ul.
 
 **Corectat în surse.** `AIZivaPackage.seedRuntime` pregătește
