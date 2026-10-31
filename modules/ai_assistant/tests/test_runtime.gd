@@ -1337,6 +1337,17 @@ func _responses_continuation_tests(node: Node) -> void:
 
 func _harness_tests(node: Node) -> void:
 	var core = scripts["harness"].new(node)
+	var multimedia = [{"role": "user", "content": "Inspect these screenshots", "attachments": []}]
+	for index in range(4): multimedia[0]["attachments"].append({"mimeType": "image/png", "data": "a".repeat(1024 * 1024)})
+	var image_estimate = core.context_tokens(multimedia)
+	var bounded_images: Dictionary = core.prepare_context(multimedia, [], 1048576)
+	check(image_estimate < 10000 and bounded_images["trimmed"] == 0 and bounded_images["messages"] == multimedia, "Four large Base64 screenshots do not fill or prune a million-token context")
+	multimedia[0]["attachments"][0]["data"] = "b".repeat(8)
+	check(core.context_tokens(multimedia) == image_estimate, "Transport encoding size never changes the token estimate of the same image count")
+	var calibrated = [{"role": "tool", "content": JSON.stringify({"result": "x".repeat(3000000)})}, {"role": "assistant", "tool_calls": [{"id": "latest", "name": "inspect", "arguments": {}}]}]
+	check(core.prepare_context(calibrated, [], 1048576, false, 100000)["trimmed"] == 0, "A provider-calibrated low context load prevents heuristic pruning of a large old tool result")
+	check(core.input_tokens({"input_tokens": 5, "cache_read_input_tokens": 100, "cache_creation_input_tokens": 20}) == 125 and core.input_tokens({"prompt_tokens": 125, "prompt_cache_hit_tokens": 100}) == 125, "Context usage includes Anthropic cache input without counting OpenAI-style cache hits twice")
+	check(core.context_tokens([{"role": "assistant", "content": "", "reasoning_content": "thought ".repeat(1000)}]) > 2000, "Retained reasoning is included in context estimates")
 	var definitions = [scripts["common"].tool("write_fixture", "Fixture", {}, [], "write")]
 	var call = {"id": "one", "name": "write_fixture", "arguments": {}}
 	var deferred = HarnessHost.new()

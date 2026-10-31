@@ -236,3 +236,38 @@ func run(qa: EditorPlugin, target: Control) -> void:
 	chat.action.connect(panel._chat_action)
 	chat.set_error_count(0)
 	check(not chat.error_button.visible, "The indicator hides when the Debugger no longer reports errors")
+
+	await inline_diff_checks()
+
+func inline_diff_checks() -> void:
+	chat.clear_messages()
+	chat.append_message("user", "Modifică viteza și păstrează originalele.")
+	chat.append_message("assistant", "Am actualizat fișierele; modificările exacte sunt mai jos.")
+	var source = "--- res://player.gd\n+++ res://player.gd\n@@ -1,1 +1,1 @@\n-speed = 5\n+speed = 12\n"
+	for index in range(60): source += "-linie veche %s\n+linie nouă %s\n" % [index, index]
+	var items = [{"path": "res://player.gd", "state": "Modificat", "exact": true, "added": 61, "removed": 61, "diff": source}, {"path": "res://nume_șir.gd", "state": "Modificat", "exact": true, "added": 1, "removed": 1, "diff": "--- res://nume_șir.gd\n+++ res://nume_șir.gd\n-eticheta = veche\n+eticheta = [url=unsafe]pădure[/url]\n"}]
+	chat.show_changes("inline-fixture", items)
+	await pause()
+	var section: Control = chat.change_cards["inline-fixture"]
+	var bodies = section.find_children("InlineDiffText", "RichTextLabel", true, false)
+	check(bodies.size() == 2 and section.find_children("*", "PanelContainer", true, false).is_empty() and section.find_children("*", "CodeEdit", true, false).is_empty(), "Changed files render inline without cards, embedded editors or nested scroll containers")
+	check(bodies[0].get_parsed_text().contains("-speed = 5") and bodies[0].get_parsed_text().contains("+speed = 12") and not bodies[0].get_parsed_text().contains("--- res://"), "Inline diffs show exact additions/deletions and keep filename headers separate")
+	check(bodies[1].get_parsed_text().contains("[url=unsafe]pădure[/url]") and not bodies[1].bbcode_enabled, "Code markup is literal and Unicode remains intact in inline diffs")
+	check(not bodies[0].scroll_active and bodies[0].fit_content and bodies[0].get_parsed_text().split("\n").size() <= 41, "Long diffs initially fit a bounded fragment in the conversation's own scroll")
+	var more: Button = section.find_child("InlineDiffMore", true, false)
+	check(more != null and more.text.contains("Arată restul"), "Long inline diffs offer an explicit expansion action")
+	chat.follow_bottom = false
+	more.pressed.emit()
+	await pause()
+	bodies = section.find_children("InlineDiffText", "RichTextLabel", true, false)
+	check(bodies[0].get_parsed_text().contains("linie nouă 59") and not chat.follow_bottom, "Expanding the rest preserves all diff lines and the reader's manual scroll mode")
+	chat.show_changes("inline-fixture", items)
+	check(section.find_children("InlineDiffText", "RichTextLabel", true, false).size() == 2, "Repeated change updates never duplicate inline file diffs")
+	chat.follow_bottom = true
+	chat.scroll.scroll_vertical = 0
+	await pause()
+	capture("chat-inline-diff")
+	chat.set_context(100000, 1048576, 2000, false, {"source": "provider", "reserve": 65536, "threshold": 943718})
+	check(chat.context_detail.contains("100000 / 1048576") and chat.context_detail.contains("65536") and chat.context_detail.contains("furnizor"), "Context details distinguish measured request usage, model capacity and output reserve")
+	chat.clear_messages()
+	check(chat.diff_expanded.is_empty(), "Changing conversation releases expanded diff state")

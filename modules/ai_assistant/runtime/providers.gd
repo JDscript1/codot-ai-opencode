@@ -252,7 +252,7 @@ func list_models(profile: Dictionary, cancel: Dictionary = {}, key_override: Str
 		var supported: Dictionary = item.get("supported_parameters", {}) if item.get("supported_parameters", {}) is Dictionary else {}
 		if item.get("supported_parameters", null) is Array: capabilities["tools"] = "tools" in item["supported_parameters"]
 		if supported.has("tools"): capabilities["tools"] = supported["tools"]
-		models.append({"id": id, "name": str(item.get("display_name", item.get("displayName", item.get("name", id)))), "capabilities": capabilities, "context": item.get("context_window", item.get("inputTokenLimit", 0)), "efforts": item.get("effort", {}).get("supported_levels", []) if item.get("effort", {}) is Dictionary else [], "source": "live", "pricing": ModelPricing.from_api(item, issuer, url + "/models")})
+		models.append({"id": id, "name": str(item.get("display_name", item.get("displayName", item.get("name", id)))), "capabilities": capabilities, "context": item.get("context_window", item.get("inputTokenLimit", 0)), "max_output_tokens": item.get("max_output_tokens", item.get("outputTokenLimit", 0)), "efforts": item.get("effort", {}).get("supported_levels", []) if item.get("effort", {}) is Dictionary else [], "source": "live", "pricing": ModelPricing.from_api(item, issuer, url + "/models")})
 	if issuer in ["lmstudio", "ollama"]:
 		var metadata = await transport.request(root + ("/api/v0/models" if issuer == "lmstudio" else "/api/ps"), HTTPClient.METHOD_GET, headers(profile, key_override), null, {"allow_http": profile.get("allow_http", false), "cancel": cancel, "timeout": 3, "connect_timeout": 2})
 		if cancel.get("cancelled", false): return Common.failure("Verificare oprită.", "cancelled")

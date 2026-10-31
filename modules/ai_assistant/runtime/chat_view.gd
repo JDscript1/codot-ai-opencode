@@ -40,6 +40,8 @@ var context_indicator: HBoxContainer
 var context_gauge: Control
 var context_ratio = -1.0
 var context_key = ""
+var context_detail = "Context necunoscut"
+var diff_expanded: Dictionary = {}
 var model_button: Button
 var picker: Control
 var drawer: PanelContainer
@@ -362,6 +364,18 @@ func _ready() -> void:
 		if context_ratio > 0:
 			context_gauge.draw_arc(gauge_center, 6 * scale, -PI / 2, -PI / 2 + TAU * context_ratio, 40, Color("edb56b") if context_ratio >= 0.8 else Color("aa8be8"), 2 * scale, true))
 	context_label = label(context_indicator, "—")
+	context_indicator.gui_input.connect(func(event: InputEvent) -> void:
+		if (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) or (event is InputEventScreenTouch and event.pressed):
+			var info = AcceptDialog.new()
+			info.title = "Contextul modelului"
+			info.dialog_text = context_detail
+			add_child(info)
+			info.confirmed.connect(info.queue_free)
+			info.canceled.connect(info.queue_free)
+			info.popup_centered_clamped(Vector2i(420, 220) * EditorInterface.get_editor_scale(), 0.9)
+			context_indicator.accept_event())
+	context_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	context_gauge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	context_label.add_theme_font_size_override("font_size", int(11 * EditorInterface.get_editor_scale()))
 	set_context(0, 0)
 	_build_voice_strip()
@@ -1215,6 +1229,7 @@ func clear_messages() -> void:
 	if latest_button != null: latest_button.hide()
 	reset_work()
 	change_cards.clear()
+	diff_expanded.clear()
 	plan_cards.clear()
 	question_cards.clear()
 	playtest_cards.clear()
@@ -2635,12 +2650,17 @@ func show_attachments(images: Array, references: Array, file_ids: Array = []) ->
 	show_file_mentions(file_ids)
 	attachment_chips.visible = attachment_chips.get_child_count() > 0
 
-func set_context(used: int, limit: int, output: int = 0, estimated: bool = false) -> void:
+func set_context(used: int, limit: int, output: int = 0, estimated: bool = false, details: Dictionary = {}) -> void:
 	context_ratio = clampf(float(used) / limit, 0, 1) if limit > 0 and used > 0 else -1.0
 	context_label.text = ("≈" if estimated else "") + str(roundi(context_ratio * 100)) + "%" if context_ratio >= 0 else "—"
 	var detail = "Context: " + (str(used) if used > 0 else "necunoscut") + (" / %s tokeni" % limit if limit > 0 else " · limită necunoscută")
 	if output > 0: detail += "\nIeșire: %s tokeni" % output
 	if estimated: detail += "\nValoare estimată"
+	if int(details.get("reserve", 0)) > 0 and limit > 0: detail += "\nRezervă pentru răspuns: %s tokeni" % details["reserve"]
+	if int(details.get("threshold", 0)) > 0 and limit > 0: detail += "\nCompactare în jurul a %s tokeni" % details["threshold"]
+	if details.get("source") == "provider": detail += "\nSursă: consum raportat de furnizor pentru ultima cerere"
+	elif details.get("source") == "provider+estimated_delta": detail += "\nSursă: furnizor + estimarea mesajelor noi"
+	context_detail = detail
 	for control in [context_indicator, context_label, context_gauge]: control.tooltip_text = detail
 	context_gauge.queue_redraw()
 
@@ -2795,19 +2815,68 @@ func show_changes(turn: String, changes: Array) -> void:
 		thread.add_child(card)
 		change_cards[turn] = card
 	var card: VBoxContainer = change_cards[turn]
+	var signature = JSON.stringify(changes).sha256_text()
+	if card.get_meta("diff_signature", "") == signature: return
+	_preserve_reader()
+	card.set_meta("diff_signature", signature)
+	card.name = "InlineChanges_" + turn
 	for child in card.get_children(): card.remove_child(child); child.queue_free()
 	var heading = label(card, ("Propunere · " if turn.ends_with("-proposal") else "Modificări · ") + str(changes.size()))
 	heading.add_theme_font_size_override("font_size", int(12 * EditorInterface.get_editor_scale()))
-	for item in changes:
-		var counts = "%s operații Undo" % item.get("operations", 0) if item.get("kind") == "scene" else ("+%s  −%s" % [item.get("added", 0), item.get("removed", 0)] if item.get("exact", false) else "binar / mare")
-		var row = button(card, str(item["path"]).trim_prefix("res://") + "    " + counts + "    " + str(item["state"]), func() -> void: action.emit("changes", {"turn": turn, "path": item["path"]}))
-		_compact_button(row)
-		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		row.clip_text = true
-		row.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	for item in changes: _inline_diff(card, turn, item)
 	for record in message_records:
 		if record["metadata"].get("turn_id") == turn: _refresh_message_controls(record)
 	_follow.call_deferred()
+
+func _inline_diff(parent: Control, turn: String, item: Dictionary) -> void:
+	var column = VBoxContainer.new()
+	column.name = "InlineDiff"
+	column.set_meta("path", str(item.get("path", "")))
+	parent.add_child(column)
+	var counts = " +%s  −%s" % [item.get("added", 0), item.get("removed", 0)] if item.get("exact", false) else ""
+	var heading = label(column, str(item.get("path", "")).trim_prefix("res://") + counts + " · " + str(item.get("state", "")))
+	heading.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	heading.add_theme_font_size_override("font_size", int(12 * EditorInterface.get_editor_scale()))
+	heading.add_theme_color_override("font_color", Color("9aa2b4"))
+	var source = str(item.get("diff", ""))
+	var lines: Array = Array(source.split("\n"))
+	if lines.size() >= 2 and str(lines[0]).begins_with("--- ") and str(lines[1]).begins_with("+++ "): lines = lines.slice(2)
+	if not lines.is_empty() and lines[-1] == "": lines.pop_back()
+	var key = turn + ":" + str(item.get("path", "")) + ":" + source.sha256_text()
+	var shown = mini(int(diff_expanded.get(key, 40)), lines.size())
+	var text = RichTextLabel.new()
+	text.name = "InlineDiffText"
+	text.fit_content = true
+	text.scroll_active = false
+	text.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.add_theme_font_override("normal_font", get_theme_font("font", "CodeEdit"))
+	text.add_theme_font_size_override("normal_font_size", int(13 * EditorInterface.get_editor_scale()))
+	column.add_child(text)
+	for line in lines.slice(0, shown):
+		var color = Color("aab3c5")
+		if item.get("exact", false):
+			if str(line).begins_with("+"): color = Color("86d99a")
+			elif str(line).begins_with("-"): color = Color("f09098")
+		text.push_color(color)
+		text.add_text(str(line) + "\n")
+		text.pop()
+	if source.is_empty(): text.add_text("%s operații Undo" % item.get("operations", 0) if item.get("kind") == "scene" else "Diff textual indisponibil pentru această modificare.")
+	if item.get("truncated", false): label(column, "Fragment salvat; diff-ul integral nu este disponibil.")
+	if shown < lines.size():
+		var more = button(column, "Arată restul · %s linii" % (lines.size() - shown) if lines.size() - shown <= 500 else "Arată încă 500 de linii", func() -> void:
+			_preserve_reader()
+			diff_expanded[key] = shown + 500
+			var index = column.get_index()
+			parent.remove_child(column)
+			column.queue_free()
+			_inline_diff(parent, turn, item)
+			parent.move_child(parent.get_child(-1), index)
+			_follow.call_deferred())
+		more.name = "InlineDiffMore"
+		_compact_button(more)
+		more.add_theme_stylebox_override("normal", _compact_style(Color.TRANSPARENT))
+		more.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 
 func show_store(items: Array) -> void:
 	for item in items:

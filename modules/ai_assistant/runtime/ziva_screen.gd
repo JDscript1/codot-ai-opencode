@@ -149,7 +149,7 @@ func _refresh() -> void:
 	if not enabled: hint.text = "Disponibil în aplicația separată Godot AI Ziva."
 	elif not linux_ready: hint.text = "Runtime Linux se pregătește automat…"
 	elif working and not state.get("running", false): hint.text = str(state.get("message", "Pregătesc Ziva…"))
-	elif not installed: hint.text = "Instalează pluginul oficial și Godot Linux (~295 MB descărcați; aproximativ 1 GB necesar)."
+	elif not installed: hint.text = "Instalează pluginul oficial și Godot Linux (~305 MB descărcați; aproximativ 1,1 GB necesari)."
 	elif not project: hint.text = "Deschide un proiect pentru a folosi Ziva."
 	elif state.get("running", false) and not state.get("same_project", false): hint.text = "Sesiunea Ziva se mută automat la proiectul curent…"
 	elif state.get("status", "") in ["error", "interrupted"]: hint.text = str(state.get("message", "Reia pornirea Ziva."))

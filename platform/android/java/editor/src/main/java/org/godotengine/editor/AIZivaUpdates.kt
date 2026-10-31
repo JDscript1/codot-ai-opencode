@@ -32,15 +32,26 @@ object AIZivaUpdates {
     fun release(metadata: JSONObject): AIZivaPackage.Release {
         check(!metadata.optBoolean("draft") && !metadata.optBoolean("prerelease")) { "Versiune Ziva nestabilă." }
         val version = metadata.getString("tag_name")
-        val name = "ziva-ai-agent-$version-godot-v4.2.0-linux-arm64.zip"
         val assets = metadata.getJSONArray("assets")
-        val matches = (0 until assets.length()).map { assets.getJSONObject(it) }.filter { it.optString("name") == name }
-        check(matches.size == 1) { "Versiunea oficială nu are un pachet Linux ARM64 compatibil." }
-        val asset = matches.single()
-        val digest = asset.getString("digest")
-        check(digest.startsWith("sha256:")) { "Versiunea oficială nu publică SHA-256." }
-        return AIZivaPackage.fromJson(JSONObject().put("version", version).put("url", asset.getString("browser_download_url"))
-            .put("archive_size", asset.getLong("size")).put("archive_hash", digest.removePrefix("sha256:")))
+        val available = (0 until assets.length()).map { assets.getJSONObject(it) }
+        fun asset(name: String): JSONObject {
+            val matches = available.filter { it.optString("name") == name }
+            check(matches.size == 1) { "Versiunea oficială nu are un pachet Linux ARM64 compatibil." }
+            return matches.single()
+        }
+        fun digest(asset: JSONObject): String {
+            val value = asset.optString("digest")
+            check(value.startsWith("sha256:")) { "Versiunea oficială nu publică SHA-256." }
+            return value.removePrefix("sha256:")
+        }
+        // Since v3.3.3 the release splits the addon from the CEF runtime archive.
+        val addon = asset("ziva-ai-agent-$version-godot-v4.2.0-linux-arm64.zip")
+        val runtime = asset("ziva-runtime-$version-linux-arm64.zip")
+        return AIZivaPackage.fromJson(JSONObject().put("version", version)
+            .put("url", addon.getString("browser_download_url")).put("archive_size", addon.getLong("size"))
+            .put("archive_hash", digest(addon))
+            .put("runtime_url", runtime.getString("browser_download_url")).put("runtime_size", runtime.getLong("size"))
+            .put("runtime_hash", digest(runtime)))
     }
     fun available(context: Context): JSONObject {
         val state = status(context)

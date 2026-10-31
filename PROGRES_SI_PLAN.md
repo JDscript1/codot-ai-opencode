@@ -8,6 +8,155 @@ etapă importantă: implementare, verificare, compilare sau livrare. „Implemen
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
 
+## AG-77 — actualizarea Ziva v3.3.3: release separat addon+runtime — 31.10.2026
+
+**Defect raportat pe dispozitiv.** Utilizatorul a pornit actualizarea din
+interfața oficială Ziva; descărcarea s-a încheiat, dar aplicarea nu. Capturile
+`Screenshot_20261031_224710.jpg` și `Screenshot_20261031_224845.jpg` arată
+„Ziva v3.3.3 is ready — Restart to apply” și, după repornire, „Unable to
+Reconnect — Could not reach the plugin server”.
+
+**Cauză.** Începând cu v3.3.3, furnizorul publică **două** arhive: addon-ul
+GDExtension (2.944.465 bytes) și runtime-ul CEF separat (224.410.556 bytes),
+înrădăcinat direct în directorul addon-ului (`bin/`, `bin-deps/`,
+`zivacode/`). Updater-ul din editorul oficial nu poate reporni sesiunea
+headless sub PRoot, deci nu aplică actualizarea; în plus, wrapper-ul nostru
+fixa v3.3.2, cu un singur pachet combinat și `zivacode` în interiorul arhivei
+addon-ului, deci nici calea `ziva_update` nu putea instala release-ul nou.
+
+**Corectat în surse.** `AIZivaPackage` fixează v3.3.3 cu ambele arhive,
+dimensiuni și SHA-256 (addon `1e06bcef…6027c4`, runtime `f485f3b0…2b39`,
+`zivacode` 136.039.416 bytes, `db476a4b…5cb6`), descarcă și verifică ambele,
+suprapune runtime-ul peste addon și activează atomic. `activeRelease` preferă
+versiunea fixată când este mai nouă, astfel încât o instalare v3.3.2 existentă
+migrează fără ștergerea prealabilă. `AIZivaUpdates` împerechează exact cele
+două active ale unei versiuni, fiecare cu digest. Updater-ul oficial rulează
+cu `ZIVA_AUTOUPDATE_DRY_RUN=1`: versiunea aparține wrapper-ului, iar
+„Restart to apply” nu mai este oferit. Textele de instalare și documentația
+indică v3.3.3 și ~305 MB descărcați (~1,1 GB la instalare).
+
+**Verificat local.** Testele Kotlin compilează și trec fără eșecuri:
+dependențe 13, pachet Ziva 49, sesiune 26, actualizări 18, context de proiect
+26. Arhivele oficiale reale v3.3.3 au fost extrase prin clasele aplicației:
+`version=v3.3.3`, binar 136.039.416 bytes cu hash-ul așteptat, 247 de fișiere,
+545.460.656 bytes, executabil și extensia prezentă. Metadatele reale GitHub
+(17 active) se împerechează exact cu perechea fixată. Binarul conține șirul
+`v3.3.3`. Dovezi: `.ai-qa/ziva-333-20261031/`.
+
+**În așteptare:** compilare CI, APK, instalare pe telefon și proba fizică a
+updater-ului/panoului. Nu s-a făcut commit, push sau înlocuire de APK în
+această etapă.
+
+Jurnal: 31.10.2026 — AG-77, actualizarea Ziva v3.3.3 (addon+runtime separat)
+corectată în surse și verificată local.
+
+## AG-76 — ambele APK-uri cu AG-75 compilate și livrate — 31.10.2026
+
+**Godot AI** și **Godot AI Ziva** au fost compilate din același snapshot
+`989d2cb967d8aa2f27391112eb6ffb1cb84b20b6`, ramura separată
+`build/context-inline-20261031T212617Z`, bazată pe `f539d79a`. Sunt incluse
+compactarea calibrată după încărcarea contextului și diffurile direct în chat
+din AG-75, împreună cu modificările anterioare din baza curentă. Checkout-ul
+principal și proiectele utilizatorului au fost păstrate.
+
+Ambele rulări CI s-au încheiat cu succes la `android`, `runtime` și
+`native-editor`:
+
+- Godot AI: https://github.com/JDscript1/godot-ai-android/actions/runs/41243609340
+- Godot AI Ziva: https://github.com/JDscript1/godot-ai-android/actions/runs/41243616486
+
+În fiecare rulare: **945 aserțiuni runtime / 0 eșecuri**, **950 verificări / 0
+eșecuri** pe fiecare dintre cele cinci configurații ale editorului upstream și
+**981 verificări / 0 eșecuri** pe fiecare configurație a editorului nativ
+compilat. Probele focalizate și testele companion trec de asemenea. Rapoartele
+au fost descărcate; capturile diffurilor au fost inspectate, inclusiv în
+editorul nativ, configurația phone_landscape.
+
+Verificare locală pentru fiecare APK: hash identic cu artefactul CI, semnătură
+validă și același certificat persistent ca instalatoarele precedente,
+pachet Android separat corect, exclusiv ARM64, toate cele **44 de scripturi
+GDScript identice cu sursa compilată**, adaptorul Ziva identic și runtime-ul
+Linux complet. Manifestele și bibliotecile native au fost verificate; toate
+cele **2678 de fișiere** din baza Linux corespund manifestului și hashurilor.
+Configurația de rețea specifică Ziva este verificată numai pentru distribuția
+care o declară în overlay-ul Android.
+
+Instalatoarele vechi `f539d79a` au fost înlocuite după verificare. În Download
+rămâne câte un APK curent pentru fiecare distribuție, cu fișier `.sha256`:
+
+- `/storage/emulated/0/Download/Godot-AI-Android-arm64-debug.apk` — 112584122 bytes.
+- `/storage/emulated/0/Download/Godot-AI-Ziva-arm64-debug.apk` — 112587394 bytes.
+
+Hashurile copiilor din Download au fost reverificate după copiere. Nu au fost
+șterse alte descărcări. Dovezi complete, rapoarte, hashuri și snapshot:
+`.ai-qa/compile-context-inline-20261031T212617Z/verification.json` și `report.md`;
+indicatorul `.ai-qa/compile-both-current.json` indică această livrare.
+
+**Limită de validare:** noile APK-uri nu au fost instalate sau testate pe
+telefon în această etapă. O conversație reală aproape de 1M tokeni și
+comportamentul Android fizic rămân probe separate de verificările automate.
+
+Jurnal: 31.10.2026 — AG-76, ambele distribuții compilate, verificate și
+înlocuite în Download cu AG-75 inclus.
+
+## AG-75 — context calibrat și diffuri direct în conversație — 31.10.2026
+
+Implementat în surse pentru agentul nativ. Estimarea anterioară putea număra
+întregul JSON, inclusiv imaginile Base64, ca text. Harness-ul și panoul folosesc
+acum același estimator pentru conținutul trimis: text, raționament păstrat,
+apeluri, scheme și imagini separate. Dimensiunea codificării unei imagini nu
+mai modifică estimarea; cei 2048 tokeni/imagine sunt explicit o aproximație,
+nu o tokenizare exactă a modelului.
+
+Fiecare răspuns principal măsurat calibrează următoarea estimare prin consumul
+raportat plus diferența estimată a conținutului nou. Măsurătoarea aparține
+conversației, profilului și modelului; rezumatele auxiliare nu o suprascriu.
+Contoarele de cache Anthropic sunt incluse în intrare, fără dublarea tokenilor
+cache deja incluși în `prompt_tokens` la furnizorii compatibili OpenAI.
+
+Compactarea automată se recalculează la fiecare verificare: pragul este minimul
+dintre **90% din fereastra publicată** și spațiul rămas după rezerva pentru
+răspuns. Pentru DeepSeek se rezervă implicit 64K, respectiv 128K la efort `max`,
+cu respectarea limitei de ieșire declarate; metadatele modelelor păstrează acum
+și `max_output_tokens`. Pe o fereastră de 1048576 tokeni, pragul general este
+943718, iar rezerva 128K îl coboară la 917504. Nu se limitează pașii agentului.
+
+Marcajele vechi se șterg când presiunea scade sau se schimbă modelul; o depășire
+reală rămâne motiv distinct de recuperare. Fără fereastră publicată nu se
+inventează un prag. Istoricul original rămâne pe disc. Implicit, compactarea
+păstrează aproximativ 55% din fereastră ca istoric recent, în loc să reducă
+mereu o conversație mare la 20k. Jurnalul `compact_trigger` înregistrează
+încărcarea, limita, rezerva, pragul și motivul; indicatorul poate fi atins
+pentru detalii despre măsurare și estimare.
+
+Diffurile fișierelor aplicate sau propuse apar direct în fluxul conversației,
+fără carduri, editoare sau zone de scroll imbricate: nume de fișier, linii
+șterse roșii cu `-`, adăugate verzi cu `+`, context neutru. Primul fragment
+are cel mult 40 de linii, iar restul se extinde la cerere în loturi de maximum
+500. Textul codului rămâne literal, inclusiv BBCode și diacritice. Poziția
+cititorului este păstrată; restaurarea și jurnalul modificărilor rămân accesibile.
+
+Verificări locale Godot Linux ARM64 4.7.2: **945 aserțiuni runtime / 0 eșecuri**,
+**132 verificări compactare / 0 eșecuri**, **136 verificări prezentare / 0
+eșecuri** pe fiecare dintre editorul îngust și configurația phone_landscape.
+Capturile diffurilor au fost inspectate. Regresii noi: 50k + patru imagini mari
+pe 1M nu compactează; consumul măsurat și diferența nouă au prioritate;
+rezumatul nu alterează contorul; scăderea încărcării și schimbarea modelului
+șterg declanșările vechi; diffurile se extind fără duplicate sau forțarea
+urmăririi mesajelor recente.
+
+Dovezi: `.ai-qa/context-inline-20261031/`. Suita completă pe sursele finale: **950 verificări / 0 eșecuri**, editor îngust.
+Prima rulare extinsă a avut două aserțiuni eșuate pentru același tap pe link;
+probele izolate trec atât pe bază, cât și pe codul nou (79/0 fiecare), iar
+rularea finală completă trece fără modificarea logicii linkurilor.
+La închiderea implementării sursă nu fuseseră recompilate sau înlocuite
+APK-urile; compilarea și livrarea ulterioare sunt consemnate la AG-76.
+Verificarea fizică Android și o conversație reală aproape de 1M tokeni
+rămân probe distincte de fixture-urile locale.
+
+Jurnal: 31.10.2026 — AG-75, compactare pe încărcarea contextului curent,
+fără tokenizarea Base64 ca text, și diffuri colorate direct în chat.
+
 ## AG-74 — replay DeepSeek în modul thinking — 31.10.2026
 
 Defect raportat din aplicația instalată: un tur cu unelte a eșuat cu
