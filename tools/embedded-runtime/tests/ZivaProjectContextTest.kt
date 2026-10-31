@@ -81,6 +81,20 @@ fun main() {
             expect(placeholder.length() == 0L && Files.getPosixFilePermissions(placeholder.toPath()) == permissions)
             expect(File(session, "AGENTS.md").readText().contains(AIZivaProjectContext.INVENTORY))
         } finally { placeholder.setReadable(true, true); placeholder.setWritable(true, true) }
+        val share = File(scratch, "share").apply { mkdirs() }
+        val named = File(scratch, "named").apply { mkdirs() }
+        fun userDirectory(config: String) =
+            File(named, "project.godot").writeText("[application]\n$config\n").let { AIZivaProjectContext.userDirectory(share, named) }
+        expect(userDirectory("config/name=\"Devonian Era\"") == File(share, "godot/app_userdata/Devonian Era"))
+        expect(userDirectory("config/name=\"My:Game.\"") == File(share, "godot/app_userdata/My-Game"))
+        expect(userDirectory("config/name=\"a/b\\c\"") == File(share, "godot/app_userdata/a-b-c"))
+        expect(userDirectory("config/name=\"\"") == File(share, "godot/app_userdata/[unnamed project]"))
+        expect(userDirectory("config/name=\"..\"") == File(share, "godot/app_userdata/twodots"))
+        expect(userDirectory("config/name=\"Game\"\nconfig/use_custom_user_dir=true\nconfig/custom_user_dir_name=\"Studio/My Game\"") ==
+            File(share, "Studio/My Game"))
+        expect(userDirectory("config/name=\"Game\"\nconfig/use_custom_user_dir=true\nconfig/custom_user_dir_name=\"\"") == File(share, "Game"))
+        expect(userDirectory("config/name=\"Game\"\nconfig/use_custom_user_dir=true\nconfig/custom_user_dir_name=\"../evil\"") ==
+            File(share, "-/evil"))
         println("Ziva project addon context: $checks checks, 0 failures")
     } finally { scratch.deleteRecursively() }
 }

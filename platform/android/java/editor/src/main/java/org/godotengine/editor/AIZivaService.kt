@@ -208,6 +208,8 @@ class AIZivaService : Service() {
                 // Discard endpoint hints only; account/session history stays intact.
                 val share = privateDirectory("projects/$projectId/local-share")
                 share.walkTopDown().maxDepth(10).filter { it.isFile && it.name.matches(Regex("sidecar-[0-9]+-.*\\.port")) }.forEach { it.delete() }
+                update("starting", "Pregătesc componentele Ziva…")
+                ziva.seedRuntime(AIZivaProjectContext.userDirectory(share, project))
                 logFile = File(data, "godot.log")
                 guestPidFile = File(privateDirectory("projects/$projectId/cache"), "godot-ai-ziva.pid").also { it.delete() }
                 child = runtime.startProcess(

@@ -115,7 +115,9 @@ func run(options: Dictionary, hooks: Dictionary) -> Dictionary:
 		if not _repair_hint.is_empty():
 			context.append({"role": "system", "content": _repair_hint})
 			_repair_hint = ""
-		var prepared = prepare_context(context, definitions, int(options.get("context_window", 0)))
+		var known_tokens = int(prepared_context.get("tokens", -1))
+		if known_tokens >= 0: known_tokens += context_tokens(context, definitions) - context_tokens(base_context, definitions)
+		var prepared = prepare_context(context, definitions, int(options.get("context_window", 0)), false, known_tokens)
 		context = prepared["messages"]
 		_context_pruned(prepared, "budget")
 		var response: Dictionary = {}
@@ -363,16 +365,45 @@ func _prepare_context(context: Array, definitions: Array, force: bool) -> Dictio
 		_checkpoint()
 	return result
 
-static func prepare_context(messages: Array, definitions: Array, window: int = 0, force: bool = false) -> Dictionary:
+static func input_tokens(usage: Dictionary) -> int:
+	for key in ["usedTokens", "prompt_tokens", "inputTokens", "promptTokenCount"]:
+		if usage.has(key): return maxi(0, int(usage[key]))
+	# Anthropic reports cache reads/writes separately from uncached input.
+	return maxi(0, int(usage.get("input_tokens", 0)) + int(usage.get("cache_read_input_tokens", 0)) + int(usage.get("cache_creation_input_tokens", 0)))
+
+static func _content_tokens(content: Variant) -> int:
+	if content is String: return int(ceil(content.to_utf8_buffer().size() / 3.0))
+	if not content is Array: return 0
+	var tokens = 0
+	for part in content:
+		if not part is Dictionary: continue
+		if part.get("type", "") in ["image", "image_url", "input_image"]:
+			tokens += 2048 # Explicit estimate, calibrated by the next provider usage.
+		elif part.get("text") is String: tokens += _content_tokens(part["text"])
+	return tokens
+
+static func context_tokens(messages: Array, definitions: Array = []) -> int:
+	# Count wire content, not our metadata or Base64 transport encoding.
+	# Images are estimated separately; provider usage remains authoritative.
+	var tokens = 16
+	for message in messages:
+		tokens += 12 + _content_tokens(message.get("content", ""))
+		tokens += _content_tokens(message.get("reasoning_content", ""))
+		if not message.get("tool_calls", []).is_empty(): tokens += _content_tokens(JSON.stringify(message["tool_calls"]))
+		for attachment in message.get("attachments", []):
+			if attachment is Dictionary and (attachment.has("data") or attachment.has("url")): tokens += 2048
+	if not definitions.is_empty(): tokens += _content_tokens(JSON.stringify(definitions))
+	return tokens
+
+static func prepare_context(messages: Array, definitions: Array, window: int = 0, force: bool = false, known_tokens: int = -1) -> Dictionary:
 	# This is a disposable provider view. History, evidence, call IDs and the
 	# side-effect ledger remain authoritative and are never rewritten here.
 	var result = {"messages": messages, "trimmed": 0, "saved_bytes": 0}
 	if window <= 0 and not force: return result
-	var size = JSON.stringify(messages).to_utf8_buffer().size()
-	var schema_bytes = JSON.stringify(definitions).to_utf8_buffer().size()
+	var size = known_tokens if known_tokens >= 0 else context_tokens(messages, definitions)
 	# Heuristic only: no guessed token count is used to refuse a valid request.
-	var budget = maxi(0, window - mini(8192, maxi(512, window / 4))) * 2
-	if not force and size + schema_bytes <= budget: return result
+	var budget = int(window * 0.9)
+	if not force and size <= budget: return result
 	var latest_batch = messages.size()
 	for index in range(messages.size() - 1, -1, -1):
 		if messages[index].get("role") == "assistant" and not messages[index].get("tool_calls", []).is_empty():
@@ -392,8 +423,8 @@ static func prepare_context(messages: Array, definitions: Array, window: int = 0
 		message["content"] = compact
 		result["trimmed"] += 1
 		result["saved_bytes"] += saved
-		size -= saved
-		if not force and size + schema_bytes <= budget: break
+		size -= _content_tokens(text) - _content_tokens(compact)
+		if not force and size <= budget: break
 	result["messages"] = view
 	return result
 

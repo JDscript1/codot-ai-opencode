@@ -12,6 +12,7 @@ fun main() {
     val addon = "addons/ziva_agent"
     val member = "$addon/zivacode/linux_arm64/zivacode"
     val payload = "fixture ELF".toByteArray()
+    val base = "https://github.com/ziva-sh/ziva-agent-plugin-godot/releases/download"
 
     fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
         .joinToString("") { "%02x".format(it.toInt() and 255) }
@@ -26,10 +27,13 @@ fun main() {
         return archive
     }
 
-    fun release(archive: File, binary: ByteArray) = AIZivaPackage.Release("v3.3.2", "https://example.invalid/fixture",
-        archive.length(), AILinuxRuntimeFiles.sha(archive), member, binary.size.toLong(), hash(binary))
+    fun release(archive: File, binary: ByteArray, runtime: File? = null) = AIZivaPackage.Release("v3.3.2",
+        "$base/v3.3.2/ziva-ai-agent-v3.3.2-godot-v4.2.0-linux-arm64.zip",
+        archive.length(), AILinuxRuntimeFiles.sha(archive), member, binary.size.toLong(), hash(binary),
+        if (runtime == null) "" else "$base/v3.3.2/ziva-runtime-v3.3.2-linux-arm64.zip",
+        runtime?.length() ?: 0, if (runtime == null) "" else AILinuxRuntimeFiles.sha(runtime))
 
-    fun entries(binary: ByteArray = payload, license: Boolean = true, gdextension: Boolean = true,
+    fun addonEntries(binary: ByteArray = payload, license: Boolean = true, gdextension: Boolean = true,
         manifest: Boolean = true, binaryEntry: Boolean = true): List<Pair<String, ByteArray>> {
         val files = mutableListOf<Pair<String, ByteArray>>()
         if (binaryEntry) files += member to binary
@@ -44,6 +48,13 @@ fun main() {
         return files
     }
 
+    // Since v3.3.3 the runtime archive is rooted at the addon directory.
+    fun runtimeEntries(binary: ByteArray = payload): List<Pair<String, ByteArray>> = listOf(
+        "zivacode/linux_arm64/zivacode" to binary,
+        "bin/linux_arm64/libcef.so" to "cef".toByteArray(),
+        "bin/linux_arm64/ziva_cef_helper" to "helper".toByteArray(),
+        "bin-deps/linux_arm64/ffmpeg" to "dep".toByteArray())
+
     fun reject(block: () -> Unit) {
         var rejected = false
         try { block() } catch (_: IllegalStateException) { rejected = true } catch (_: IllegalArgumentException) { rejected = true }
@@ -52,7 +63,7 @@ fun main() {
 
     try {
         val root = File(scratch, "linux").apply { mkdirs() }
-        val good = zip("good", entries())
+        val good = zip("good", addonEntries())
         val spec = release(good, payload)
         val distribution = AIZivaPackage(root, spec)
         check(!distribution.installed()); checks++
@@ -81,10 +92,10 @@ fun main() {
         check(!cancelled.installed()); checks++
 
         for ((name, files) in listOf(
-            "no-license" to entries(license = false),
-            "no-gdextension" to entries(gdextension = false),
-            "no-manifest" to entries(manifest = false),
-            "no-binary" to entries(binaryEntry = false))) {
+            "no-license" to addonEntries(license = false),
+            "no-gdextension" to addonEntries(gdextension = false),
+            "no-manifest" to addonEntries(manifest = false),
+            "no-binary" to addonEntries(binaryEntry = false))) {
             val archive = zip(name, files)
             val target = AIZivaPackage(File(scratch, name).apply { mkdirs() }, release(archive, payload))
             reject { target.extract(archive) }
@@ -95,7 +106,7 @@ fun main() {
 
         for ((name, path) in listOf("dotdot" to "$addon/../evil.txt", "backslash" to "$addon/..\\evil.txt",
             "blank" to "$addon//evil.txt")) {
-            val archive = zip(name, entries() + (path to "evil".toByteArray()))
+            val archive = zip(name, addonEntries() + (path to "evil".toByteArray()))
             val target = AIZivaPackage(File(scratch, name).apply { mkdirs() }, release(archive, payload))
             reject { target.extract(archive) }
             check(!target.installed()); checks++
@@ -112,7 +123,7 @@ fun main() {
         check(!File(broken, "opt/godot-tools/ziva/v3.3.2").exists() &&
             File(broken, "opt/godot-tools/ziva").listFiles().orEmpty().isEmpty()); checks++
 
-        val upgrade = zip("upgrade", entries(binary = "upgrade ELF".toByteArray()))
+        val upgrade = zip("upgrade", addonEntries(binary = "upgrade ELF".toByteArray()))
         reject { AIZivaPackage(root, release(upgrade, "upgrade ELF".toByteArray()).copy(binaryHash = "0".repeat(64))).extract(upgrade) }
         check(distribution.installed() && distribution.binary.readText() == "fixture ELF"); checks++
 
@@ -121,20 +132,95 @@ fun main() {
         File(installed.addon, "manifest.json").delete()
         check(!installed.installed()); checks++
 
+        val splitRoot = File(scratch, "split").apply { mkdirs() }
+        val splitAddon = zip("split-addon", addonEntries(binaryEntry = false))
+        val splitRuntime = zip("split-runtime", runtimeEntries())
+        val splitSpec = release(splitAddon, payload, splitRuntime).copy(version = "v3.3.3",
+            url = "$base/v3.3.3/ziva-ai-agent-v3.3.3-godot-v4.2.0-linux-arm64.zip",
+            runtimeUrl = "$base/v3.3.3/ziva-runtime-v3.3.3-linux-arm64.zip")
+        val split = AIZivaPackage(splitRoot, splitSpec)
+        reject { split.extract(splitAddon) } // the runtime archive is mandatory
+        split.extract(splitAddon, splitRuntime)
+        split.verify()
+        check(split.binary.readText() == "fixture ELF" && File(split.addon, "bin/linux_arm64/libcef.so").isFile); checks++
+        check(split.binary.canExecute() && File(split.addon, "bin/linux_arm64/libcef.so").canExecute()); checks++
+        check(File(split.addon, "bin-deps/linux_arm64/ffmpeg").canExecute() && !File(scratch, "outside.txt").exists()); checks++
+        reject { AIZivaPackage(splitRoot, splitSpec.copy(runtimeHash = "0".repeat(64))).extract(splitAddon, splitRuntime) }
+        check(split.installed() && split.binary.readText() == "fixture ELF"); checks++
+        reject { AIZivaPackage(root, spec).extract(good, splitRuntime) } // a legacy release rejects an extra archive
+        val mismatched = zip("mismatched-runtime", runtimeEntries("other ELF".toByteArray()))
+        reject { AIZivaPackage(splitRoot, splitSpec.copy(runtimeSize = mismatched.length(),
+            runtimeHash = AILinuxRuntimeFiles.sha(mismatched))).extract(splitAddon, mismatched) }
+        val missingRuntimeBinary = zip("missing-runtime-binary",
+            runtimeEntries().filterNot { it.first == "zivacode/linux_arm64/zivacode" })
+        reject { AIZivaPackage(splitRoot, release(splitAddon, payload, missingRuntimeBinary)
+            .copy(version = "v3.3.3", url = splitSpec.url, runtimeUrl = splitSpec.runtimeUrl))
+            .extract(splitAddon, missingRuntimeBinary) }
+        val leaky = zip("leaky-runtime", runtimeEntries() + ("../evil.txt" to "evil".toByteArray()))
+        reject { AIZivaPackage(File(scratch, "leaky").apply { mkdirs() }, release(splitAddon, payload, leaky)
+            .copy(version = "v3.3.3", url = splitSpec.url, runtimeUrl = splitSpec.runtimeUrl))
+            .extract(splitAddon, leaky) }
+        val clash = zip("clash-addon", addonEntries(binaryEntry = false) + ("$addon/bin/linux_arm64/libcef.so" to "addon".toByteArray()))
+        reject { AIZivaPackage(splitRoot, splitSpec.copy(archiveSize = clash.length(),
+            archiveHash = AILinuxRuntimeFiles.sha(clash))).extract(clash, splitRuntime) }
+
+        // The extension binary sits beside the overlay but never belongs to user:// runtime.
+        File(split.addon, "bin/linux_arm64/libziva_agent.linux.release.arm64.so").writeText("agent binary")
+        val unsafeSeed = File(scratch, "unsafe-seed").apply { mkdirs() }
+        val outsideSeed = File(scratch, "seed-outside").apply { mkdirs() }
+        File(outsideSeed, "secret").writeText("secret")
+        val link = File(split.addon, "bin-deps/linux_arm64/link")
+        Files.createSymbolicLink(link.toPath(), File(outsideSeed, "secret").toPath())
+        reject { split.seedRuntime(unsafeSeed) }
+        Files.delete(link.toPath())
+        check(!File(unsafeSeed, "ziva/runtime/v3.3.3").exists()); checks++
+
+        val userData = File(scratch, "user-data").apply { mkdirs() }
+        val runtimeRoot = File(userData, "ziva/runtime")
+        val partial = File(runtimeRoot, "v3.3.3.download.1234.zip-abcde").apply { parentFile.mkdirs(); writeText("partial") }
+        val damaged = File(runtimeRoot, "v3.3.3.damaged.abc").apply { writeText("damaged") }
+        val orphanSeed = File(runtimeRoot, "v3.3.3.seed-123e4567-e89b-12d3-a456-426614174000").apply { mkdirs() }
+        val orphanOld = File(runtimeRoot, "v3.3.3.old-123e4567-e89b-12d3-a456-426614174000").apply { mkdirs() }
+        split.seedRuntime(userData)
+        val seeded = File(runtimeRoot, "v3.3.3")
+        check(File(seeded, ".ready").isFile && File(seeded, ".ready").readText() == splitSpec.runtimeHash &&
+            File(seeded, ".ready").length() == 64L); checks++
+        check(File(seeded, "bin/linux_arm64/libcef.so").readText() == "cef" &&
+            File(seeded, "bin/linux_arm64/ziva_cef_helper").readText() == "helper" &&
+            File(seeded, "bin-deps/linux_arm64/ffmpeg").readText() == "dep" &&
+            File(seeded, "zivacode/linux_arm64/zivacode").readText() == "fixture ELF"); checks++
+        check(!File(seeded, "bin/linux_arm64/libziva_agent.linux.release.arm64.so").exists() &&
+            !partial.exists() && !damaged.exists() && !orphanSeed.exists() && !orphanOld.exists()); checks++
+        check(File(seeded, "zivacode/linux_arm64/zivacode").canExecute()); checks++
+        // A complete seed is not rewritten, even if the project user dir is reused.
+        val markerTime = 1_000_000_000_000L
+        File(seeded, ".ready").setLastModified(markerTime)
+        split.seedRuntime(userData)
+        check(File(seeded, ".ready").lastModified() == markerTime &&
+            File(seeded, "bin/linux_arm64/libcef.so").readText() == "cef"); checks++
+        // A stale marker forces a refresh from the verified overlay.
+        File(seeded, ".ready").writeText("stale")
+        split.seedRuntime(userData)
+        check(File(seeded, ".ready").readText() == splitSpec.runtimeHash &&
+            File(seeded, "bin/linux_arm64/libcef.so").readText() == "cef"); checks++
+        val legacySeed = File(scratch, "legacy-seed")
+        distribution.seedRuntime(legacySeed)
+        check(!legacySeed.exists()); checks++
+
         val versionsRoot = File(scratch, "versions").apply { mkdirs() }
-        val official = spec.copy(url = AIZivaPackage.RELEASE.url)
-        val first = AIZivaPackage(versionsRoot, official)
+        val first = AIZivaPackage(versionsRoot, spec)
         first.extract(good); first.activate()
-        check(AIZivaPackage(versionsRoot).version == "v3.3.2"); checks++
-        val next = release(upgrade, "upgrade ELF".toByteArray()).copy(version = "v3.3.3",
-            url = AIZivaPackage.RELEASE.url.replace("v3.3.2", "v3.3.3"), binarySize = 0, binaryHash = "")
-        val replacement = AIZivaPackage(versionsRoot, next)
-        replacement.extract(upgrade); replacement.verify()
-        check(AIZivaPackage(versionsRoot).version == "v3.3.2"); checks++ // extraction never activates a failed runtime
+        // A recorded v3.3.2 must not outlive the version pinned by this app.
+        check(AIZivaPackage(versionsRoot).version == AIZivaPackage.RELEASE.version); checks++
+        val replacement = AIZivaPackage(versionsRoot, splitSpec)
+        replacement.extract(splitAddon, splitRuntime); replacement.verify()
+        // Extraction never replaces the recorded active release on its own.
+        check(AILinuxRuntimeFiles.readJson(File(versionsRoot, "opt/godot-tools/ziva/active.json"))
+            .getString("version") == "v3.3.2"); checks++
         replacement.activate()
         val active = AIZivaPackage(versionsRoot)
         active.verify()
-        check(active.version == "v3.3.3" && active.binary.readText() == "upgrade ELF"); checks++
+        check(active.version == "v3.3.3" && active.binary.readText() == "fixture ELF"); checks++
         check(first.binary.readText() == "fixture ELF" && history.readText() == "KEEP"); checks++
         active.binary.appendText("tampered")
         reject { active.verify() }

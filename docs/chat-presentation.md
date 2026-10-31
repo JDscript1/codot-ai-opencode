@@ -81,6 +81,19 @@ Planurile, întrebările interactive și cardurile de verificare sunt păstrate.
 
 ## Telefon și navigare
 
+Modificările fișierelor sunt diffuri direct în conversație, fără carduri:
+numele fișierului deasupra, ștergeri roșii (`-`), adăugări verzi (`+`) și context
+neutru. Fragmentul inițial are cel mult 40 de linii; **Arată restul** extinde
+conținutul, în loturi de maximum 500 de linii pentru diffuri foarte lungi.
+Codul este literal, fără interpretarea BBCode. Derularea rămâne cea a
+conversației; accesul existent la jurnal și restaurare este păstrat.
+
+Indicatorul de context poate fi atins pentru consumul ultimei cereri, fereastra
+modelului, rezerva pentru răspuns și pragul compactării. `≈` indică o estimare;
+după un răspuns cu usage, estimarea următoare folosește măsurătoarea furnizorului
+plus conținutul nou. Consumul cumulat al sarcinii este o metrică separată.
+Rezervarea contextului tratează imaginile separat de codificarea lor Base64.
+
 Glisarea pe mesaje navighează în conversație. Apăsarea lungă oferă copierea;
 o atingere scurtă pe un link folosește hit-testing-ul nativ, fără selectarea
 accidentală a textului. Linkurile HTTP(S) sunt validate; căile proiectului

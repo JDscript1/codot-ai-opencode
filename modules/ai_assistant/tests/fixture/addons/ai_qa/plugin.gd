@@ -2183,6 +2183,8 @@ func _auto_compaction_tests() -> void:
 	var saved_tokens = panel.compact_tokens
 	var saved_limit = panel.compact_limit
 	var saved_failed = panel.compact_failed
+	var saved_measurement: Dictionary = panel.context_measurement.duplicate(true)
+	var saved_overflow = panel.compact_overflow_key
 	var saved_queue: Array = panel.queued
 	var saved_paused = panel.queue_paused
 	var saved_mode = panel.mode_picker.selected
@@ -2205,7 +2207,7 @@ func _auto_compaction_tests() -> void:
 	panel._control_preference("auto_compact", true)
 	_check(panel._auto_compact_enabled(), "Automatic compaction can be re-enabled")
 	panel.compact_limit = 32768
-	_check(panel._compact_threshold() == 16384 and panel._compact_keep_recent() == 16384, "The default reserve and recent window follow the documented token budget")
+	_check(panel._compact_threshold() == 29491 and panel._compact_keep_recent() == 20000, "The default reserve and recent window follow the documented token budget")
 	_check(panel._is_overflow_text("400 context_length_exceeded: maximum context length is 32768") and not panel._is_overflow_text("Connection refused"), "Overflow errors are recognized without treating ordinary failures as context overflows")
 
 	panel.history = []
@@ -2237,6 +2239,7 @@ func _auto_compaction_tests() -> void:
 	panel.compact_through = 0
 	panel.compact_pending = true
 	service.fail = true
+	panel._record_context_measurement(profile, "fixture", panel.Harness.context_tokens(panel._context_messages()), {"prompt_tokens": 31000})
 	await panel._start_compaction("auto")
 	_check(service.requests == 1 and panel.compact_failed and not panel.compact_pending and panel.compact_through == 0, "A failed automatic summary keeps history intact and suppresses an immediate retry")
 	service.fail = false
@@ -2244,8 +2247,8 @@ func _auto_compaction_tests() -> void:
 	panel.compact_pending = false
 	panel.compact_tokens = 0
 	panel.compact_limit = 32768
-	panel._set_usage({"usedTokens": 20000, "contextWindowTokens": 32768}, profile, "fixture")
-	_check(panel.compact_pending and panel.compact_tokens == 20000, "Usage above the reserved budget marks automatic compaction as pending")
+	panel._set_usage({"usedTokens": 31000, "contextWindowTokens": 32768}, profile, "fixture")
+	_check(panel.compact_pending and panel.compact_tokens == 31000, "Usage above the reserved budget marks automatic compaction as pending")
 	panel.compact_pending = false
 	panel._set_usage({"usedTokens": 4000, "contextWindowTokens": 32768}, profile, "fixture")
 	_check(not panel.compact_pending, "Usage well below the reserved budget does not schedule compaction")
@@ -2254,6 +2257,7 @@ func _auto_compaction_tests() -> void:
 	panel._set_usage({"usedTokens": 900, "contextWindowTokens": 1024}, {"id": "compact-fixture", "models": []}, "fixture")
 	_check(not panel.compact_pending and panel.compact_limit == 0, "Tiny context windows are left alone instead of using provider defaults")
 	await _compaction_regression_tests(service, summary_path)
+	await _context_pressure_tests(service)
 	await _active_compaction_tests(service, summary_path)
 
 	panel.providers = original_service
@@ -2266,6 +2270,8 @@ func _auto_compaction_tests() -> void:
 	panel.compact_tokens = saved_tokens
 	panel.compact_limit = saved_limit
 	panel.compact_failed = saved_failed
+	panel.context_measurement = saved_measurement
+	panel.compact_overflow_key = saved_overflow
 	panel.queued = saved_queue
 	panel.queue_paused = saved_paused
 	panel._refresh_profiles()
@@ -2294,7 +2300,7 @@ func _compaction_regression_tests(service: RefCounted, summary_path: String) -> 
 	]
 	for index in range(invalid.size()):
 		service.replies = [invalid[index], invalid[index]]
-		await panel._start_compaction("auto")
+		await panel._start_compaction("manual")
 		_check(panel.compact_failed and panel.compact_through == 2 and panel.compact_summary == previous, "Invalid summary preserves the active context: %d" % index)
 		_check(panel.Common.read_json(summary_path, {}) == saved, "Invalid summary preserves the saved context: %d" % index)
 	service.replies.clear()
@@ -2380,6 +2386,75 @@ func _compaction_regression_tests(service: RefCounted, summary_path: String) -> 
 	_check(panel.Common.read_json(summary_path, {}).get("text") == previous and panel.Common.read_json(summary_path, {}).get("through") == 0, "Intermediate batches never replace the durable summary")
 	var output = OS.get_environment("GODOT_AI_QA_OUTPUT")
 	if not output.is_empty(): panel.Common.atomic_json(output.path_join("compact-regressions.json"), {"window": 8192, "largest_reserved_estimate": max_budget, "bounded": bounded, "all_source_markers_sent": covered, "history_preserved": panel.history == history_copy})
+
+func _context_pressure_tests(service: RefCounted) -> void:
+	var profile: Dictionary = panel._current_profile()
+	var previous_window = profile["models"][0]["context"]
+	var previous_history: Array = panel.history
+	var previous_summary = panel.compact_summary
+	var previous_through = panel.compact_through
+	var previous_meter: Dictionary = panel.context_measurement.duplicate(true)
+	var previous_overflow = panel.compact_overflow_key
+	var previous_failed = panel.compact_failed
+	var previous_cancel: Dictionary = panel.cancel
+	profile["models"][0]["context"] = 1048576
+	panel.context_measurement.clear()
+	panel.compact_overflow_key = ""
+	panel.compact_failed = false
+	panel.cancel = {"cancelled": false}
+	var messages = [{"role": "user", "content": "x".repeat(150000), "attachments": []}]
+	for index in range(4): messages[0]["attachments"].append({"data": "a".repeat(1024 * 1024), "mimeType": "image/png"})
+	panel.compact_pending = true # Old small-model / Base64 estimate must be discarded.
+	var requests = service.requests
+	var ready: Dictionary = await panel._prepare_agent_context(profile, "fixture", messages, [], false)
+	_check(ready.get("ok", false) and not ready.get("compacted", false) and service.requests == requests and not panel.compact_pending, "A 50k-token conversation plus four large screenshots never compacts a 1M model due to a stale flag")
+	var estimate = panel.Harness.context_tokens(messages)
+	panel._record_context_measurement(profile, "fixture", estimate, {"prompt_tokens": 100000})
+	var pressure: Dictionary = panel._context_pressure(profile, "fixture", messages, [])
+	_check(pressure["used"] == 100000 and pressure["source"] == "provider+estimated_delta" and not panel.compact_pending, "Provider input usage takes precedence over a local estimate and cumulative spending")
+	messages.append({"role": "assistant", "content": "delta ".repeat(500)})
+	pressure = panel._context_pressure(profile, "fixture", messages, [])
+	_check(pressure["used"] > 100000 and pressure["used"] < 102000, "New content adds only its estimated delta to the latest measured request")
+	var main_tokens = panel.compact_tokens
+	panel._set_usage({"prompt_tokens": 950000, "completion_tokens": 2000}, profile, "fixture", false)
+	_check(panel.compact_tokens == main_tokens and not panel.compact_pending and panel.context_measurement["input"] == 100000, "An auxiliary summary cannot overwrite the main context meter or trigger another summary")
+	panel._record_context_measurement(profile, "fixture", panel.Harness.context_tokens(messages), {"prompt_tokens": 950000})
+	pressure = panel._context_pressure(profile, "fixture", messages, [])
+	_check(panel.compact_pending and pressure["threshold"] == 943718, "A real measured load above 90 percent schedules one compaction")
+	panel._set_usage({"prompt_tokens": 100000}, profile, "fixture")
+	_check(not panel.compact_pending, "A lower measured load clears a previously pending automatic compaction")
+	var other = {"id": profile["id"], "models": [{"id": "large-other", "context": 1048576}]}
+	panel.compact_pending = true
+	pressure = panel._context_pressure(other, "large-other", [{"role": "user", "content": "Hello"}], [])
+	_check(not panel.compact_pending and pressure["used"] < 100 and pressure["source"] == "estimate", "Changing model drops the previous measurement and pending threshold")
+	var deepseek = {"id": "direct", "issuer": "deepseek", "models": [{"id": "deepseek-flash", "context": 1048576, "max_output_tokens": 393216}]}
+	_check(panel._context_reserve(deepseek, "deepseek-flash", 1048576) >= 65536, "DeepSeek leaves room for its default reasoning output instead of using an unrelated tiny reserve")
+	# Real automatic dispatch: calibrate a small local estimate against high
+	# provider usage, then verify the resulting summary is not run again.
+	panel.history = []
+	for index in range(8): panel.history.append({"role": "user" if index % 2 == 0 else "assistant", "content": "evidence ".repeat(1500)})
+	panel.history.append({"role": "user", "content": "Keep the latest request"})
+	panel.compact_summary = ""
+	panel.compact_through = 0
+	panel.compact_failed = false
+	panel.config["preferences"].erase("compact_keep_recent")
+	panel._record_context_measurement(profile, "fixture", panel.Harness.context_tokens(panel._context_messages()), {"prompt_tokens": 950000})
+	requests = service.requests
+	await panel._start_compaction("auto")
+	_check(panel.compact_through > 0 and service.requests > requests and not panel.compact_pending, "Measured near-limit usage dispatches automatic compaction even when the tokenizer estimate is much smaller")
+	requests = service.requests
+	await panel._start_compaction("auto")
+	_check(service.requests == requests, "A successful compaction is not immediately repeated below the trigger threshold")
+	panel.config["preferences"]["compact_keep_recent"] = 256
+	panel.history = previous_history
+	panel.compact_summary = previous_summary
+	panel.compact_through = previous_through
+	panel._persist_summary()
+	panel.context_measurement = previous_meter
+	panel.compact_overflow_key = previous_overflow
+	panel.compact_failed = previous_failed
+	panel.cancel = previous_cancel
+	profile["models"][0]["context"] = previous_window
 
 func _active_compaction_tests(service: RefCounted, summary_path: String) -> void:
 	var saved_turn = panel.current_turn

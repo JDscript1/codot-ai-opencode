@@ -139,6 +139,8 @@ var compact_pending = false
 var compact_tokens = 0
 var compact_limit = 0
 var compact_failed = false
+var context_measurement: Dictionary = {}
+var compact_overflow_key = ""
 const COMPACT_RESERVE = 16384
 const COMPACT_KEEP_RECENT = 20000
 const COMPACT_MIN_WINDOW = 8192
@@ -2579,7 +2581,12 @@ func _start_chat(text: String, selection: Dictionary = {}) -> void:
 		if not project_manager_mode and project_knowledge.dirty:
 			await project_knowledge.refresh(tools, stopping)
 			context.append({"role": "system", "content": "Refreshed project map: " + JSON.stringify(project_knowledge.summary())})
-		return await providers.complete(profile, context, definitions, model, effort, stopping, delta)
+		var scope = _context_scope(profile, model)
+		var estimate = Harness.context_tokens(Providers.normalize_context(profile, model, context), definitions)
+		var response = await providers.complete(profile, context, definitions, model, effort, stopping, delta)
+		if response.get("ok", false) and scope == _context_scope(profile, model):
+			_record_context_measurement(profile, model, estimate, response.get("usage", {}))
+		return response
 	var metadata = current_origin.merged({"wire_source": str(profile["id"]) + ":" + model})
 	var hooks = {"complete": complete, "context": _context_messages, "execute": _execute_call, "redact": _redact, "checkpoint": _harness_checkpoint, "steering": _take_steering, "steering_pending": _has_steering, "continuation_prompt": planner.context, "needs_continuation": func() -> bool: return _mode() != 3 and planner.needs_continuation(), "completion_problem": _completion_problem, "blocked_reason": func() -> String: return planner.explanation if planner.phase == "blocked" and not planner.explanation.is_empty() else ("Planul necesită clarificare înainte de continuare." if planner.phase == "blocked" else "")}
 	if engineering_store != null:
@@ -3115,6 +3122,7 @@ func _finish_chat(message: String, outcome: Dictionary = {}) -> void:
 	if completed and queued.is_empty(): _play_completion()
 	_status(message + (" · %s mesaje în coadă" % queued.size() if not queued.is_empty() else ""))
 	if _is_overflow_text(message) or _is_overflow_text(str(outcome.get("error", outcome.get("message", "")))) or _is_overflow_text(str(outcome.get("code", ""))):
+		compact_overflow_key = _context_scope(_current_profile(), str(current_origin.get("model_id", "")))
 		compact_pending = true
 		compact_failed = false
 	if _auto_compact_enabled() and compact_pending and not compact_failed: _start_compaction.call_deferred("auto")
@@ -3794,12 +3802,9 @@ func _send_or_queue(text: String = "", delivery: String = "queue") -> void:
 		# Never inherit the threshold of a previously selected model. An
 		# unpublished window disables the guessed pre-request trigger; a real
 		# provider overflow still marks compaction as pending.
-		compact_limit = 0
-		for item in profile.get("models", []):
-			if str(item.get("id", "")) == model and int(item.get("context", 0)) >= COMPACT_MIN_WINDOW: compact_limit = int(item["context"])
-		if compact_limit >= COMPACT_MIN_WINDOW and compact_tokens <= 0:
-			compact_tokens = _estimate_context_tokens() + int(ceil(text.strip_edges().length() / 4.0))
-			if compact_tokens > _compact_threshold(): compact_pending = true
+		var context = _context_messages()
+		context.append({"role": "user", "content": text, "attachments": pending_attachments})
+		_context_pressure(profile, model, context, [])
 	if engineering_store != null and not project_manager_mode: engineering_store.capture_preference(text, {"conversation": str(conversations.index["active"])})
 	var selection = _selection()
 	selection["files"] = pending_files.duplicate()
@@ -4605,33 +4610,62 @@ func _compact() -> void:
 func _auto_compact_enabled() -> bool:
 	return bool(config.get("preferences", {}).get("auto_compact", true))
 
+func _context_scope(profile: Dictionary, model: String) -> String:
+	return JSON.stringify([conversations.index.get("active", ""), profile.get("id", ""), model])
+
+func _context_reserve(profile: Dictionary, model: String, window: int) -> int:
+	var reserve = mini(COMPACT_RESERVE, maxi(512, window / 10))
+	if profile.get("kind") == "anthropic": reserve = 8192
+	if str(profile.get("issuer", profile.get("id", ""))) == "deepseek":
+		var effort = str(current_origin.get("effort", "")) if current_origin.get("model_id") == model else ""
+		if effort.is_empty() and effort_picker != null and effort_picker.selected >= 0: effort = str(effort_picker.get_selected_metadata())
+		reserve = 131072 if effort == "max" else 65536
+	for item in profile.get("models", []):
+		if str(item.get("id", "")) == model and int(item.get("max_output_tokens", 0)) > 0:
+			reserve = mini(reserve, int(item["max_output_tokens"]))
+	return clampi(int(config.get("preferences", {}).get("compact_reserve", reserve)), 512, maxi(512, window / 2))
+
 func _compact_reserve() -> int:
-	var reserve = int(config.get("preferences", {}).get("compact_reserve", COMPACT_RESERVE))
-	return clampi(reserve, 512, maxi(512, compact_limit / 2))
+	var model = str(model_picker.get_selected_metadata()) if model_picker != null and model_picker.selected >= 0 else ""
+	return _context_reserve(_current_profile(), model, compact_limit)
 
 func _compact_threshold() -> int:
-	return maxi(0, compact_limit - _compact_reserve())
+	return maxi(0, mini(int(compact_limit * 0.9), compact_limit - _compact_reserve()))
+
+func _record_context_measurement(profile: Dictionary, model: String, estimate: int, usage: Dictionary) -> void:
+	var input = Harness.input_tokens(usage)
+	if input <= 0: return
+	context_measurement = {"scope": _context_scope(profile, model), "input": input, "estimate": estimate, "window": int(usage.get("contextWindowTokens", 0))}
+
+func _context_pressure(profile: Dictionary, model: String, context: Array, definitions: Array) -> Dictionary:
+	var scope = _context_scope(profile, model)
+	var estimate = Harness.context_tokens(Providers.normalize_context(profile, model, context), definitions)
+	var used = estimate
+	var source = "estimate"
+	if context_measurement.get("scope") == scope and int(context_measurement.get("estimate", 0)) > 0:
+		used = maxi(0, int(context_measurement["input"]) + estimate - int(context_measurement["estimate"]))
+		source = "provider+estimated_delta"
+	compact_limit = _compaction_window(profile, model)
+	compact_tokens = used
+	var reserve = _context_reserve(profile, model, compact_limit)
+	var threshold = maxi(0, mini(int(compact_limit * 0.9), compact_limit - reserve))
+	# Recompute, never inherit a sticky pending flag from another model or a
+	# previous oversized estimate. Only a real provider overflow bypasses this.
+	compact_pending = (compact_limit >= COMPACT_MIN_WINDOW and used >= threshold) or compact_overflow_key == scope
+	return {"used": used, "limit": compact_limit, "reserve": reserve, "threshold": threshold, "estimated": true, "source": source}
 
 func _compact_keep_recent() -> int:
-	var keep = int(config.get("preferences", {}).get("compact_keep_recent", COMPACT_KEEP_RECENT))
+	var keep = int(config.get("preferences", {}).get("compact_keep_recent", maxi(COMPACT_KEEP_RECENT, int(compact_limit * 0.55))))
 	# An unpublished window has no threshold to clamp against; keep the normal
 	# recent range instead of collapsing the tail to a single message.
 	if compact_limit <= 0: return maxi(256, keep)
 	return clampi(keep, 256, maxi(256, _compact_threshold()))
 
 func _message_tokens(message: Dictionary) -> int:
-	var tokens = int(ceil(str(message.get("content", "")).length() / 4.0)) + 12
-	for attachment in message.get("attachments", []):
-		tokens += 800 if attachment.has("data") else 32
-	var calls = message.get("tool_calls", [])
-	if not calls.is_empty(): tokens += int(ceil(JSON.stringify(calls).length() / 4.0))
-	return tokens
+	return Harness.context_tokens([message]) - 16
 
 func _estimate_context_tokens() -> int:
-	var tokens = 4096
-	if not compact_summary.is_empty(): tokens += int(ceil(compact_summary.length() / 4.0))
-	for message in _history_context(): tokens += _message_tokens(message)
-	return tokens
+	return Harness.context_tokens(_context_messages())
 
 func _history_context() -> Array:
 	# The whole retained transcript is sent to the model: no message-count window
@@ -4677,6 +4711,7 @@ func _is_overflow_text(text: String) -> bool:
 func _compaction_window(profile: Dictionary, model: String) -> int:
 	for item in profile.get("models", []):
 		if str(item.get("id", "")) == model and int(item.get("context", 0)) > 0: return int(item["context"])
+	if context_measurement.get("scope") == _context_scope(profile, model): return maxi(0, int(context_measurement.get("window", 0)))
 	# An unknown window is never guessed (and never inherited from a previous
 	# selection): pruning and compaction then follow the provider's own
 	# overflow signal instead of an invented token budget. Summary requests
@@ -4804,7 +4839,7 @@ func _summarize_context(profile: Dictionary, model: String, cut: int, stopping: 
 		var response = await _compaction_summary(profile, batch["messages"], stopping, model, request_output_tokens)
 		var usage: Dictionary = response.get("usage", {})
 		if active:
-			if not usage.is_empty(): _set_usage(usage, profile, model)
+			if not usage.is_empty(): _set_usage(usage, profile, model, false)
 			elif response.get("ok", false):
 				turn_input_tokens += int(ceil(JSON.stringify(batch["messages"]).length() / 4.0))
 				if response.get("message") is Dictionary: turn_output_tokens += int(ceil(str(response["message"].get("content", "")).length() / 4.0))
@@ -4839,19 +4874,22 @@ func _summarize_context(profile: Dictionary, model: String, cut: int, stopping: 
 
 func _prepare_agent_context(profile: Dictionary, model: String, context: Array, definitions: Array, force: bool = false) -> Dictionary:
 	if cancel.get("cancelled", false): return Common.failure("Compactare oprită.", "cancelled")
-	if not _auto_compact_enabled(): return Common.success(context)
+	context = Providers.normalize_context(profile, model, context)
+	var pressure = _context_pressure(profile, model, context, definitions)
+	chat.set_context(int(pressure["used"]), int(pressure["limit"]), 0, true, pressure)
+	var retained = {"ok": true, "result": context, "tokens": pressure["used"]}
+	if not _auto_compact_enabled(): return retained
 	# A failed auxiliary summary must not prevent the real agent request or
 	# retry before every tool step/resume. Harness.prepare_context still bounds
 	# old tool results in a disposable view; the authoritative history is intact.
-	if compact_failed: return Common.success(context)
-	var known_window = profile.get("models", []).any(func(item: Dictionary) -> bool: return str(item.get("id", "")) == model and int(item.get("context", 0)) >= COMPACT_MIN_WINDOW)
-	if not force and not known_window and not compact_pending: return Common.success(context)
-	compact_limit = _compaction_window(profile, model)
-	var estimate = int(ceil((JSON.stringify(context).to_utf8_buffer().size() + JSON.stringify(definitions).to_utf8_buffer().size()) / 3.0))
-	if not force and not compact_pending and estimate <= _compact_threshold(): return Common.success(context)
-	var keep = mini(_compact_keep_recent(), maxi(256, compact_limit / 8)) if force else _compact_keep_recent()
+	if compact_failed: return retained
+	if not force and not compact_pending: return retained
+	var keep = mini(_compact_keep_recent(), maxi(256, int(compact_limit * 0.4))) if force else _compact_keep_recent()
+	if context_measurement.get("scope") == _context_scope(profile, model) and int(context_measurement.get("input", 0)) > 0:
+		keep = maxi(256, int(keep * float(context_measurement.get("estimate", 1)) / int(context_measurement["input"])))
 	var cut = _compact_cut(keep, true)
-	if cut <= compact_through: return Common.success(context)
+	if cut <= compact_through: return retained
+	_record_event("compact_trigger", pressure.merged({"forced": force, "through": cut}), Common.success("Context aproape de limită" if not force else "Recuperare după depășirea contextului"))
 	_status("Compactez contextul · păstrez sarcina curentă…")
 	var result = await _summarize_context(profile, model, cut, cancel, true)
 	if result.get("ok", false) and _save_summary(str(result["result"]), cut) != OK:
@@ -4863,13 +4901,16 @@ func _prepare_agent_context(profile: Dictionary, model: String, context: Array, 
 		compact_pending = false
 		_record_event("compact_fallback", {"forced": force, "code": result.get("code", "")}, {"ok": true, "history_preserved": true, "strategy": "bounded_tool_results"})
 		_status("Rezumat indisponibil · continui cu contextul păstrat…")
-		return Common.success(context)
+		return retained
 	compact_summary = str(result["result"])
 	compact_through = cut
+	context_measurement.clear()
+	compact_overflow_key = ""
 	compact_pending = false
 	compact_tokens = _estimate_context_tokens()
 	chat.set_context(compact_tokens, compact_limit, 0, true)
-	return {"ok": true, "result": _context_messages(), "compacted": true, "through": cut}
+	var prepared = Providers.normalize_context(profile, model, _context_messages())
+	return {"ok": true, "result": prepared, "tokens": Harness.context_tokens(prepared, definitions), "compacted": true, "through": cut}
 
 func _start_compaction(reason: String) -> void:
 	if busy or history.is_empty():
@@ -4884,7 +4925,16 @@ func _start_compaction(reason: String) -> void:
 	var model = str(model_picker.get_item_metadata(model_picker.selected))
 	var window = _compaction_window(profile, model)
 	compact_limit = window
-	var cut = _compact_cut(_compact_keep_recent())
+	if reason != "manual":
+		var pressure = _context_pressure(profile, model, _context_messages(), [])
+		if not compact_pending:
+			if not queued.is_empty() and not queue_paused: _run_next.call_deferred()
+			return
+		_record_event("compact_trigger", pressure.merged({"reason": reason, "forced": compact_overflow_key == _context_scope(profile, model)}), Common.success("Context aproape de limită"))
+	var keep = _compact_keep_recent()
+	if context_measurement.get("scope") == _context_scope(profile, model) and int(context_measurement.get("input", 0)) > 0:
+		keep = maxi(256, int(keep * float(context_measurement.get("estimate", 1)) / int(context_measurement["input"])))
+	var cut = _compact_cut(keep)
 	if cut <= compact_through:
 		compact_pending = false
 		if reason == "manual": _status("Conversația este deja compactată sau prea scurtă pentru compactare.")
@@ -4904,6 +4954,8 @@ func _start_compaction(reason: String) -> void:
 	if result.get("ok", false):
 		compact_summary = summary
 		compact_through = cut
+		context_measurement.clear()
+		compact_overflow_key = ""
 		compact_pending = false
 		compact_failed = false
 		compact_tokens = _estimate_context_tokens()
@@ -4920,22 +4972,25 @@ func _start_compaction(reason: String) -> void:
 		_status(str(result.get("error", "Compactare nereușită.")) if reason == "manual" else "Compactarea automată a eșuat; continui cu istoricul existent.")
 	if not queued.is_empty() and not queue_paused: _run_next.call_deferred()
 
-func _set_usage(usage: Dictionary, profile: Dictionary, model: String) -> void:
-	var input = int(usage.get("usedTokens", usage.get("input_tokens", usage.get("prompt_tokens", usage.get("inputTokens", usage.get("promptTokenCount", 0))))))
+func _set_usage(usage: Dictionary, profile: Dictionary, model: String, update_context: bool = true) -> void:
+	var input = Harness.input_tokens(usage)
 	var output = int(usage.get("output_tokens", usage.get("completion_tokens", usage.get("outputTokens", usage.get("candidatesTokenCount", 0)))))
 	if busy:
 		turn_input_tokens += maxi(0, input)
 		turn_output_tokens += maxi(0, output)
+	if not update_context: return # Auxiliary summaries affect cost, never the main context meter.
 	if profile_picker.selected >= 0 and model_picker.selected >= 0:
 		if str(profile.get("id", "")) != str(_current_profile().get("id", "")) or model != str(model_picker.get_selected_metadata()): return
 	var limit = int(usage.get("contextWindowTokens", 0))
 	for item in profile.get("models", []):
 		if item["id"] == model and int(item.get("context", 0)) > 0: limit = int(item["context"])
+	compact_limit = limit if limit >= COMPACT_MIN_WINDOW else 0
 	if limit >= COMPACT_MIN_WINDOW:
 		compact_limit = limit
 		compact_tokens = input if input > 0 else _estimate_context_tokens()
-		if compact_tokens > _compact_threshold(): compact_pending = true
-	chat.set_context(input, limit, output, bool(usage.get("estimated", false)))
+		compact_pending = compact_tokens >= _compact_threshold() or compact_overflow_key == _context_scope(profile, model)
+	else: compact_pending = compact_overflow_key == _context_scope(profile, model)
+	chat.set_context(input, limit, output, bool(usage.get("estimated", false)), {"reserve": _context_reserve(profile, model, limit), "threshold": _compact_threshold(), "source": "provider"})
 
 func _agent_definitions() -> Array:
 	return _intelligence_definitions() + Engineering.definitions() + [Verification.definition(), Common.tool("agent_spawn", "Delegate a focused task to Explore, General or Playtest. Children return findings/proposed changes, never edit project files. Provide explicit context; they do not receive the whole chat. Use agent_wait for the report.", {"kind": Common.string_field(), "task": Common.string_field()}, ["kind", "task"], "external"), Common.tool("agent_wait", "Wait for a child agent report.", {"id": Common.string_field()}, ["id"]), Common.tool("agent_cancel", "Cancel a child agent.", {"id": Common.string_field()}, ["id"]), Planner.definition(), Planner.question_definition(), Common.tool("memory_write", "Save explicit durable project preferences to project memory. Do not include credentials.", {"text": Common.string_field()}, ["text"], "write"), Common.tool("ziva_task", "Hand a self-contained task to the official Ziva agent running in the separate Ziva tab. It works in the same Godot project via its own tools, in a dedicated chat titled 'Godot AI'. Ziva never sees this conversation: include every path, requirement and acceptance criterion. The call waits until Ziva answers or asks for permission. Answer length is capped; use ziva_task_result for the rest.", {"prompt": Common.string_field(), "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 1800}}, ["prompt"], "external"), Common.tool("ziva_task_poll", "Resume waiting for a Ziva delegation started by ziva_task. Use after a permission or question was requested once the user answered it in the Ziva tab.", {"job_id": Common.string_field(), "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 1800}}, ["job_id"]), Common.tool("ziva_task_result", "Read a character slice of a finished Ziva answer. Follow next_offset until it is -1.", {"job_id": Common.string_field(), "offset": {"type": "integer", "minimum": 0}, "limit": {"type": "integer", "minimum": 1, "maximum": 12000}}, ["job_id"])]
@@ -5308,6 +5363,8 @@ func _show_changes(turn: String, path: String = "") -> void:
 	dialog.popup_centered_clamped(Vector2i(740, 540), 0.92)
 
 func _load_summary() -> void:
+	context_measurement.clear()
+	compact_overflow_key = ""
 	var saved: Dictionary = Common.read_json(project_directory.path_join("summary_" + str(conversations.index["active"]) + ".json"), {})
 	compact_summary = str(saved.get("text", "")).strip_edges()
 	compact_through = clampi(int(saved.get("through", 0)), 0, history.size()) if not compact_summary.strip_edges().is_empty() else 0

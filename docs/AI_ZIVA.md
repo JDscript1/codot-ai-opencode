@@ -32,9 +32,11 @@ aplicației pierde jocurile. După un răspuns Ziva cu unelte executate, harta
 proiectului, diagnosticile și verificarea noastră sunt marcate învechite, fiindcă
 Ziva editează aceleași fișiere prin uneltele ei.
 
-Contractul RPC este cel privat al pachetului v3.3.2 (`chats/create`,
+Contractul RPC a fost stabilit pe pachetul v3.3.2 (`chats/create`,
 `chats/sendPrompt`, `chats/snapshot`, `plugin/bootstrap`, anvelopa oRPC
-`{"json": …}`) și poate diferi între versiuni; erorile sunt raportate explicit,
+`{"json": …}`), singura versiune probată cap-coadă pe dispozitiv; versiunea
+fixată acum este v3.3.3, deci reutilizarea lui cere o nouă probă de delegare.
+Contractul poate diferi între versiuni; erorile sunt raportate explicit,
 fără reîncercări ascunse. Verificarea de până acum este statică (schema din
 bundle-ul oficial), plus fixture-ul Godot cu un bridge simulat: 8 verificări
 noi pentru delegare, tăierea răspunsului, permisiune și anulare. Pe dispozitiv,
@@ -162,7 +164,7 @@ stării, nu frontend-ul proprietar sau un furnizor real.
 
 Ziva are propria secțiune în setări, propria interfață web oficială, proces,
 autentificare și date. Mesajele, cheile și modelul Ziva nu trec prin harness-ul
-nostru. Varianta curentă rulează **pluginul oficial Ziva v3.3.2 într-un editor
+nostru. Varianta curentă rulează **pluginul oficial Ziva v3.3.3 într-un editor
 Godot Linux separat, headless**, iar editorul Android și agentul nostru continuă
 în paralel. Integrarea rămâne experimentală: verificarea pe dispozitiv și un tur complet
 cu model real sunt încă necesare. Livrarea APK-ului este consemnată în
@@ -174,8 +176,9 @@ Pluginul oficial este o extensie GDExtension Linux ARM64 (glibc), cu server,
 interfață și CEF proprii. Editorul Android nu poate încărca o bibliotecă glibc
 într-un proces Bionic și nu există un binar Android al pluginului. Fluxul ales:
 
-1. La cerere, aplicația descarcă arhiva oficială completă v3.3.2 și Godot
-   4.7.2 Linux ARM64 din release-urile oficiale.
+1. La cerere, aplicația descarcă cele două arhive oficiale v3.3.3 — addon-ul
+   GDExtension și runtime-ul CEF, publicate separat începând cu v3.3.3 — și
+   Godot 4.7.2 Linux ARM64 din release-urile oficiale.
 2. Serviciul Android pornește Godot-ul oficial headless pe proiect, sub PRoot,
    cu addon-ul montat în `/workspace/addons/ziva_agent`.
 3. Pluginul își pornește serverul și interfața oficială pe `127.0.0.1`, în
@@ -223,13 +226,16 @@ verificate înainte de activare.
 
 | Componentă | Arhivă | SHA-256 arhivă | Conținut verificat |
 | --- | --- | --- | --- |
-| Ziva v3.3.2 Linux ARM64 | 217.601.938 bytes | `0a852ea62028d6fa1dce10693b20a66ce208b338b778eaecf09ee55e00fd5d66` | `zivacode` 116.771.624 bytes, `7797be07153d515fb0a96a8438f811d633610e4e39caa582334e87cc5ef6c200` |
+| Ziva v3.3.3 addon Linux ARM64 | 2.944.465 bytes | `1e06bcef313aa092393ea64e4a10202f3077ec5fba223dfd7d42525fec6027c4` | GDExtension, manifestul și licența |
+| Ziva v3.3.3 runtime Linux ARM64 | 224.410.556 bytes | `f485f3b0f381fe4ec40b10788f0af62bea487c94ec6d830ec811c09f24f32b39` | `zivacode` 136.039.416 bytes, `db476a4bfe636760fe7838c5bea1f9ec421a23dfb4daa16c73a8494a17da5cb6`; CEF, locale, helper |
 | Godot 4.7.2 Linux ARM64 | 77.008.699 bytes | `5dd0d86405cf7e8adf79fb6377b38ba682a2846cb378ffe5364f38c01ad29b9d` | executabil 137.953.888 bytes, `3fcb80f4fe794e3859360eb641d8c41d8ffe2c2e54ba1981e55a76851d5ed1f4` |
 
-Pentru Ziva se extrage numai subarborele `addons/ziva_agent/` (261 fișiere,
-aproximativ 503 MB): GDExtension, manifestul, licența, bibliotecile și
-executabilul. Instalatorul verifică dimensiunea și SHA-256 arhivei, limitează
-fiecare fișier la 320 MiB, totalul la 600 MiB și numărul la 4000, refuză căile
+Din arhiva addon-ului se extrage numai subarborele `addons/ziva_agent/`;
+arhiva runtime este înrădăcinată direct în acel director (`bin/`,
+`bin-deps/`, `zivacode/`), deci cele două se suprapun în aceeași instalare.
+Rezultatul verificat local are 247 de fișiere și 545.460.656 bytes.
+Instalatorul verifică dimensiunea și SHA-256 pentru fiecare arhivă, limitează
+fiecare fișier la 320 MiB, totalul la 768 MiB și numărul la 4000, refuză căile
 `..`/absolute/duplicate și legăturile simbolice și acordă drept de execuție
 pentru `bin/`, `bin-deps/` și `zivacode/`. Instalarea se face în staging, se
 validează, apoi se activează printr-o redenumire atomică; instalarea anterioară
@@ -238,15 +244,22 @@ este păstrată până la succes, iar un eșec nu atinge datele Ziva.
 Godot se extrage dintr-un singur membru fix al arhivei oficiale, cu hash și
 dimensiune verificate, apoi primește drept de execuție. Ambele instalatoare
 refuză un root simbolic, o versiune care iese din director și spațiul insuficient.
-Cerința de spațiu acoperă arhiva, conținutul dezarhivat, o eventuală instalare
-veche păstrată temporar și o marjă; în practică sunt necesari aproximativ 1 GB
-la instalare. Descărcările sunt de circa 295 MB.
+Cerința de spațiu acoperă arhivele, conținutul dezarhivat, o eventuală instalare
+veche păstrată temporar și o marjă; în practică sunt necesari aproximativ 1,1 GB
+la instalare. Descărcările sunt de circa 305 MB.
 
-După instalare, serviciul rulează `zivacode --version` și `godot --version` prin
-PRoot; instalarea este confirmată numai pentru `v3.3.2`, respectiv
+După instalare, la fiecare proiect, serviciul copiază conținutul runtime-ului
+verificat în directorul privat `user://ziva/runtime/v3.3.3` al proiectului, ca
+extensia să nu îl descarce singură; hardlink-ul evită în mod normal spațiul
+suplimentar, iar dacă sistemul îl refuză rămâne o copie de circa 535 MB.
+Serviciul rulează `zivacode --version` și `godot --version` prin
+PRoot; instalarea este confirmată numai pentru `v3.3.3`, respectiv
 `4.7.2.stable`. Binarele ajung sub
-`/opt/godot-tools/ziva/v3.3.2/addons/ziva_agent/` și
+`/opt/godot-tools/ziva/v3.3.3/addons/ziva_agent/` și
 `/opt/godot-tools/godot/4.7.2/godot` în filesystem-ul Linux al aplicației.
+Un `active.json` vechi (de exemplu v3.3.2) nu blochează migrarea: versiunea
+fixată în aplicație are prioritate când este mai nouă, iar instalarea veche
+rămâne neatinsă până la o activare reușită.
 
 Licența Ziva este proprietară. Descărcarea opțională nu acordă drepturi de
 redistribuire a binarului într-un APK; pentru o distribuție care îl include este
@@ -264,14 +277,24 @@ explicită. La pornire:
   cache-ul de import;
 - montează proiectul în `/workspace` și addon-ul în
   `/workspace/addons/ziva_agent`;
+- pregătește `user://ziva/runtime/v3.3.3` direct din overlay-ul verificat al
+  addon-ului, cu `.ready` egal cu SHA-256-ul arhivei runtime. Extensia v3.3.3
+  nu citește runtime-ul din directorul addon-ului și ar descărca singură cele
+  224 MB, imposibil de terminat în limita de pornire. Seeding-ul este atomic și
+  idempotent; folosește hardlink când sistemul îl permite, altfel copie, și
+  șterge descărcările parțiale rămase;
 - lansează Godot-ul oficial cu `--headless --editor --path /workspace`, cu
-  `ZIVA_ENABLE_HEADLESS=1`.
+  `ZIVA_ENABLE_HEADLESS=1` și `ZIVA_AUTOUPDATE_DRY_RUN=1` (updater-ul oficial
+  raportează actualizările fără să modifice fișiere; versiunea o administrează
+  wrapper-ul).
 
 Pornirea este declarată reușită numai după trei probe: răspuns HTML 200 pentru
-interfață, handshake MCP cu identitatea `ziva-godot` v3.3.2 și un apel de
-citire `tools/call get_project_info` cu rezultat nevid. Abia atunci serviciul
+interfață, handshake MCP cu identitatea `ziva-godot` la versiunea pachetului
+instalat (acum v3.3.3) și un apel de citire `tools/call get_project_info` cu
+rezultat nevid. Abia atunci serviciul
 publică portul în `state.json` și permite deschiderea ferestrei. Limita de
-pornire este de 180 secunde; primul import poate fi lent. Un heartbeat verifică
+pornire este de 180 secunde; primul import poate fi lent, dar runtime-ul deja
+pregătit nu mai consumă timpul cu o descărcare în fundal. Un heartbeat verifică
 interfața la fiecare 2 secunde și oprește sesiunea după 30 de eșecuri
 consecutive sau când editorul se închide. Ultimele 128 KB din ieșirea editorului
 rămân în `ai-ziva/projects/<project-id>/godot.log`.
@@ -301,8 +324,8 @@ aceste comportamente sunt implementate și compilate, dar necesită test fizic.
 
 `ziva.gd` face controlul `install`, `start`, `stop` și afișarea `embed`.
 Butonul din setări deschide tabul principal; nu mai lansează un Dialog.
-Panoul arată instalarea (`~295 MB`), spațiul total de aproximativ 1 GB și
-faptul că backend-ul rulează într-un editor separat. WebView-ul se afișează
+Panoul arată instalarea (`~305 MB` descărcați), spațiul total de aproximativ
+1,1 GB și faptul că backend-ul rulează într-un editor separat. WebView-ul se afișează
 numai când serviciul raportează un port valid pentru proiectul curent.
 Oprirea readuce controlul de pornire, iar o eroare de pachet oferă repararea
 fără ștergerea istoricului. Controalele Ziva nu modifică istoricul sau
@@ -323,15 +346,23 @@ nu mai oferă «connect», token sau configurație MCP.
 Proba separată, în Debian/PRoot, a folosit exact montările serviciului: addon-ul
 oficial complet montat peste `/workspace/addons/ziva_agent`, cache `.godot` și
 directoare XDG private. A confirmat interfața HTML la `127.0.0.1:7012`,
-identitatea MCP `ziva-godot` v3.3.2 și apelul de citire `get_project_info` fără
-inițializare prealabilă. Proiectul gazdă a rămas nemodificat, iar CEF nu a fost
-inițializat în modul headless. Această probă nu este rularea din APK.
+identitatea MCP `ziva-godot` v3.3.2 (versiunea de atunci) și apelul de citire
+`get_project_info` fără inițializare prealabilă. Proiectul gazdă a rămas
+nemodificat, iar CEF nu a fost inițializat în modul headless. Această probă nu
+este rularea din APK și nu acoperă v3.3.3. Proba AG-78, cu proiect minimal sub
+PRoot pe telefon și runtime-ul pregătit manual, a eliminat descărcarea (niciun
+`ZIVA_RUNTIME event=download_start`) și a adus sidecarul la `listening on port
+7012`; nici ea nu a rulat serviciul Android.
 
-Testele Kotlin acoperă instalatoarele: 33/0 pentru pachetul Ziva și 19/0 pentru
-Godot, inclusiv refuzul căilor nesigure, hash-urilor greșite, anulării și
-păstrarea instalării anterioare. Aceleași clase au extras arhivele oficiale
-reale din cache: `zivacode` 116.771.624 bytes și Godot 137.953.888 bytes, cu
-drept de execuție. Fixture-ul Godot verifică panoul și independența față de
+Testele Kotlin acoperă instalatoarele: 58/0 pentru pachetul Ziva (inclusiv
+perechile addon+runtime din actualizări, 18/0, seeding-ul runtime-ului și
+markerul de terminare) și 34/0 pentru contextul de proiect (inclusiv derivarea
+directorului `user://`), plus 19/0 pentru Godot, cu refuzul
+căilor nesigure, hash-urilor greșite, anulării și păstrarea instalării
+anterioare. Clasele reale au extras arhivele oficiale v3.3.3: 247 de fișiere și
+545.460.656 bytes pentru addon+runtime (`zivacode` 136.039.416 bytes, hash
+`db476a4bfe636760fe7838c5bea1f9ec421a23dfb4daa16c73a8494a17da5cb6`) și Godot
+137.953.888 bytes, ambele cu drept de execuție. Fixture-ul Godot verifică panoul și independența față de
 istoricul/profilurile agentului: 55/0. Regresia runtime a trecut 750/0, iar
 regresia completă a editorului pe aspectul îngust a trecut **756/0** (exit 0,
 `editor-report.json`). Compilarea Kotlin împotriva SDK Android nu reprezintă o
@@ -361,11 +392,14 @@ Ziva nu accesează imaginile sau mesh-urile private din chatul agentului nostru.
 Limitări de proiectare: cele două editoare partajează fișierele proiectului,
 deci editările simultane se pot suprascrie; Ziva vede propria stare de editor,
 nu modificările nesalvate din editorul Android, și invers. PRoot nu constituie
-o izolare de securitate. Instalarea consumă aproximativ 1 GB și necesită
-rețea; Android poate opri serviciul în fundal.
+o izolare de securitate. Instalarea consumă aproximativ 1,1 GB și necesită
+rețea; Android poate opri serviciul în fundal. Actualizarea este controlată de
+aplicație, nu de updater-ul din editorul oficial: acesta din urmă nu poate
+reporni sesiunea headless sub PRoot, deci rulează în modul de probă fără
+modificări de fișiere.
 
 Surse: [instalare oficială](https://ziva.sh/docs/installation),
-[release v3.3.2](https://github.com/ziva-sh/ziva-agent-plugin-godot/releases/tag/v3.3.2),
+[release v3.3.3](https://github.com/ziva-sh/ziva-agent-plugin-godot/releases/tag/v3.3.3),
 [Godot 4.7.2 Linux ARM64](https://github.com/godotengine/godot/releases/tag/4.7.2-stable),
 [condiții Ziva](https://ziva.sh/terms).
 

@@ -36,6 +36,8 @@ class AIZivaSession(private val directory: File) {
         const val OWNER_FILE = "/run/godot-ai-ziva/owner"
         fun startupEnvironment(): Map<String, String> = mapOf(
             "ZIVA_ENABLE_HEADLESS" to "1", "GODOT_SILENCE_ROOT_WARNING" to "1",
+            // The official plugin cannot restart this session; versioning belongs to the wrapper.
+            "ZIVA_AUTOUPDATE_DRY_RUN" to "1",
             // Android denies real hardlinks. PRoot's emulated links become stale
             // when Git promotes a bulk-fsync temporary object directory.
             "GIT_CONFIG_COUNT" to "1", "GIT_CONFIG_KEY_0" to "core.createObject", "GIT_CONFIG_VALUE_0" to "rename"

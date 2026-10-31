@@ -38,6 +38,38 @@ object AIZivaProjectContext {
     private fun value(text: String?) = text.orEmpty().trim().removeSurrounding("\"")
     private fun path(project: File, file: File) = "res://" + file.relativeTo(project).invariantSeparatorsPath
 
+    private fun safeDirName(name: String, allowPaths: Boolean = false): String {
+        var safe = if (allowPaths) name.replace('\\', '/').replace("//", "/").trim()
+            else name.trim().let { if (it == ".") "dot" else if (it == "..") "twodots" else it }
+        for (char in ":*?\"<>|") safe = safe.replace(char, '-')
+        safe = if (allowPaths) safe.replace("..", "-") else safe.replace("/", "-").replace("\\", "-")
+        return safe.trimEnd('.')
+    }
+
+    /** Mirrors OS::get_user_data_dir() so the host seeds exactly the user:// Godot will read. */
+    fun userDirectory(share: File, project: File): File {
+        val application = section(File(project, "project.godot"), "application")
+        val appname = safeDirName(value(application["config/name"]))
+        val parts = when {
+            appname.isEmpty() -> listOf("godot", "app_userdata", "[unnamed project]")
+            value(application["config/use_custom_user_dir"]).toBoolean() -> {
+                val custom = safeDirName(value(application["config/custom_user_dir_name"]), true).ifEmpty { appname }
+                // path_join treats a leading slash as another relative segment.
+                custom.split('/').filter { it.isNotEmpty() }
+            }
+            else -> listOf("godot", "app_userdata", appname)
+        }
+        var directory = share
+        for (part in parts) {
+            require(part.isNotEmpty() && part != "." && part != "..") { "Numele directorului de date Godot este invalid." }
+            directory = File(directory, part)
+        }
+        check(directory.canonicalPath.startsWith(share.canonicalPath + File.separator)) {
+            "Numele directorului de date Godot este invalid."
+        }
+        return directory
+    }
+
     fun snapshot(project: File): JSONObject {
         val root = project.canonicalFile
         val manifests = mutableListOf<File>()
