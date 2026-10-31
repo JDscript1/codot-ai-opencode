@@ -60,8 +60,38 @@ Ziva 58 (inclusiv seeding, marker, curățare, refuz de legătură), sesiune 26,
 actualizări 18, context de proiect 34 (inclusiv derivarea directorului de date).
 Dovezi: `.ai-qa/ziva-333-20261031/` și `.ai-qa/ziva-333-device-20261031/`.
 
+**Compilat, livrat și verificat pe dispozitiv.** Snapshot-ul
+`0fd54fbaa15d7ce720dc1a64a361fc8f4d9f6fad`, pe ramura
+`build/ziva-333-runtime-seed-20261031T230816Z` (bază `f539d79a`), a trecut CI
+[41251258293](https://github.com/JDscript1/godot-ai-android/actions/runs/41251258293):
+`runtime`, `android` și `native-editor` — succes; 945 aserțiuni runtime / 0
+eșecuri; 950 / 0 pe fiecare dintre cele cinci configurații upstream; 981 / 0 pe
+fiecare configurație nativă; 9 teste companion; probele focalizate trec. APK-ul
+`Godot-AI-Ziva-arm64-debug.apk` are 112.592.262 bytes, SHA-256
+`5a27a85f013d7ce45e50db54a454cd05654140356b1de1d1d8b8e78f337d56c4` și semnătură
+validă cu certificatul
+`2e0a80969c099f7ff72bfe0c0cd33d98ebdd0e64bbf9729294df0b11665fcab5`; pachetul
+`com.jdscript.godotai.ziva.debug`, exclusiv ARM64, 44 de scripturi GDScript
+identice cu sursa, adaptorul Ziva identic, 2678 de fișiere Linux verificate, iar
+DEX-ul conține `ziva/runtime`, `seedRuntime`, `userDirectory`, `.ready` și
+mesajul de eroare al seeding-ului. Fișierul din `Download` și `.sha256` au fost
+înlocuite și reverificate după copiere.
+
+Pe dispozitiv, APK-ul a fost instalat cu `adb install -r` peste aplicația
+existentă, păstrând datele; seed-ul manual folosit la diagnoză a fost șters
+înainte de probă. Aplicația a recreat singură `user://ziva/runtime/v3.3.3`: 236
+de fișiere și 534.671.202 bytes, plus `.ready` de 64 bytes cu `f485f3b0…2b39`,
+suma fișierelor fiind exact conținutul arhivei runtime. Legătura dură a fost
+refuzată (link count 1), deci s-a folosit copia de rezervă. Sesiunea a pornit
+automat și a ajuns `running` pe portul 7012; interfața răspunde HTTP 200, tabul
+Ziva este randat în editor, sidecarul raportează `listening on port 7012` și
+`health check passed`, iar jurnalul gdext nu mai conține niciun
+`ZIVA_RUNTIME event=download_start` după această pornire. Nu s-a trimis niciun
+prompt de model. Dovezi: `.ai-qa/compile-ziva-333-runtime-seed-20261031T230816Z/`.
+
 Jurnal: 31.10.2026 — AG-78, runtime-ul Ziva v3.3.3 pregătit de gazdă înainte de
 pornire; descărcarea de 224 MB a extensiei eliminată din calea critică.
+APK-ul a fost livrat în `Download` și verificat pe dispozitiv.
 
 ## AG-77 — actualizarea Ziva v3.3.3: release separat addon+runtime — 31.10.2026
 

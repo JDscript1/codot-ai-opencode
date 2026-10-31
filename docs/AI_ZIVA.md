@@ -354,6 +354,17 @@ PRoot pe telefon și runtime-ul pregătit manual, a eliminat descărcarea (niciu
 `ZIVA_RUNTIME event=download_start`) și a adus sidecarul la `listening on port
 7012`; nici ea nu a rulat serviciul Android.
 
+APK-ul AG-78 (snapshot `0fd54fba`, CI 41251258293) a fost instalat cu
+`adb install -r` peste aplicația existentă, cu datele păstrate, iar seed-ul
+manual folosit la diagnoză a fost șters înainte de probă. Aplicația a recreat
+singură `user://ziva/runtime/v3.3.3` cu 236 de fișiere și 534.671.202 bytes,
+plus `.ready` de 64 bytes egal cu SHA-256-ul runtime-ului; hardlink-ul a fost
+refuzat, deci s-a folosit copia de rezervă. Sesiunea a pornit automat și a ajuns
+`running` pe portul 7012, cu interfața HTTP 200, tabul Ziva randat, sidecarul
+`listening on port 7012` și `health check passed`, fără niciun
+`ZIVA_RUNTIME event=download_start` nou. Nu s-a trimis niciun prompt de model.
+Date: `.ai-qa/compile-ziva-333-runtime-seed-20261031T230816Z/`.
+
 Testele Kotlin acoperă instalatoarele: 58/0 pentru pachetul Ziva (inclusiv
 perechile addon+runtime din actualizări, 18/0, seeding-ul runtime-ului și
 markerul de terminare) și 34/0 pentru contextul de proiect (inclusiv derivarea
