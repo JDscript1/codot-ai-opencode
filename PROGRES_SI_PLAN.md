@@ -54,22 +54,23 @@ HTTP determinist; disponibilitatea modelelor pentru contul utilizatorului și
 comportamentul fiecărui furnizor rămân de confirmat pe dispozitiv. OpenCode
 limitează oficial modelele free-tier la clientul său, deci un client extern
 poate primi HTTP 403 cu o cheie validă; modelele plătite nu au această
-restricție. Build-ul standard din rularea de mai sus a trecut și a produs
-`Godot-AI-Android-arm64-9bd6188-debug.apk`, package
+restricție. Build-ul standard din rularea de mai sus a trecut și a produs un
+APK livrat ca `Godot-AI-Android-arm64-debug.apk` (build `9bd6188`), package
 `com.jdscript.godotai.debug`, 112.597.054 bytes, SHA-256
 `303e6acb661fe6dfc3cbb191bb2792903c624686a26ca6439059776299a5b092`.
 Artefactul verificat este în
-`/storage/emulated/0/Download/Godot-AI-Android-arm64-9bd6188-debug.apk`, cu
-checksum alăturat; nu a fost instalat automat.
+`/storage/emulated/0/Download/Godot-AI-Android-arm64-debug.apk`, cu checksum
+alăturat; nu a fost instalat automat.
 
 Rularea [41328657187](https://github.com/JDscript1/godot-ai-android/actions/runs/41328657187)
 pentru distribuția `ziva-preview` a trecut de asemenea toate cele trei joburi.
-A produs `Godot-AI-Ziva-arm64-a89ed5c-debug.apk`, package
+A produs un APK livrat ca `Godot-AI-Ziva-arm64-debug.apk` (build `a89ed5c`),
+package
 `com.jdscript.godotai.ziva.debug`, 112.598.378 bytes, SHA-256
 `813149eb95bd643dc48860b62722677a1af0c190fb8936dc3a2403a084681858`.
 APK-ul Ziva verificat este în
-`/storage/emulated/0/Download/Godot-AI-Ziva-arm64-a89ed5c-debug.apk`, cu
-checksum alăturat; nici acesta nu a fost instalat automat.
+`/storage/emulated/0/Download/Godot-AI-Ziva-arm64-debug.apk`, cu checksum
+alăturat; nici acesta nu a fost instalat automat.
 
 Jurnal: 1.11.2026 — AG-80, OpenCode Zen adăugat cu descoperirea catalogului,
 rutare pe patru protocoale, tarife inline și replay pentru reasoning.
