@@ -1,5 +1,9 @@
 # Ziva independent în Godot AI — preview
 
+> **Notă:** Integrarea Android descrisă aici este un proiect independent, fără
+> afiliere cu Ziva.sh. Pluginul și runtime-ul Ziva sunt proprietare, se descarcă
+> din release-ul oficial și nu sunt redistribuite în acest depozit.
+
 ## Delegare către agentul Ziva — 31.10.2026
 
 Agentul nostru poate cere oficialului Ziva o sarcină de sine stătătoare, prin

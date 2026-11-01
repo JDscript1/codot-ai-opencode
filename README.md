@@ -154,6 +154,11 @@ The [older Termux backend](docs/AI_TERMUX_BLENDER.md) remains in source for
 compatibility, and the [runtime history](docs/AI_EMBEDDED_BLENDER_RUNTIME.md)
 records the earlier experimental stages.
 
+> **Unofficial integration.** This Android Ziva preview is an independent
+> project and is not affiliated with or endorsed by Ziva.sh. The Ziva plugin and
+> runtime remain proprietary; they are downloaded from the official release and
+> are not redistributed by this repository.
+
 The APK includes [3D preview controls and image-purpose rules](docs/AI_ASSET_RULES.md):
 touch/mouse orbit with directional buttons, distinct reconstruction/sprite/texture
 prompts, alpha verification and an optional Runware background-removal tool.
