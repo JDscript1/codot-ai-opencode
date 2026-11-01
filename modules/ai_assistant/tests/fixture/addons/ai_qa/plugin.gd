@@ -647,7 +647,26 @@ func _chat_lifecycle_tests() -> void:
 	await get_tree().process_frame
 	_check(not chat.follow_bottom and chat.latest_button.visible, "Mouse-wheel history browsing also detaches following")
 	_check(chat.scroll.get_global_rect().encloses(chat.latest_button.get_global_rect()), "Latest-message arrow fits inside the conversation")
+	_check(absf(chat.latest_button.get_global_rect().get_center().x - chat.scroll.get_global_rect().get_center().x) <= 1, "Latest-message arrow is centered above the composer")
+	var arrow_center = chat.latest_button.get_global_rect().get_center()
+	var arrow_touch = InputEventScreenTouch.new()
+	arrow_touch.index = 10
+	arrow_touch.position = arrow_center
+	arrow_touch.pressed = true
+	_check(not chat._chat_touch(arrow_touch), "Latest-message arrow receives its own touch press")
+	arrow_touch.pressed = false
+	_check(not chat._chat_touch(arrow_touch), "Latest-message arrow receives its own touch release")
 	_workspace_capture(OS.get_environment("GODOT_AI_QA_OUTPUT"), "chat-history-arrow")
+	var arrow_click = InputEventMouseButton.new()
+	arrow_click.button_index = MOUSE_BUTTON_LEFT
+	arrow_click.position = arrow_center
+	arrow_click.pressed = true
+	chat.get_viewport().push_input(arrow_click)
+	await get_tree().process_frame
+	arrow_click.pressed = false
+	chat.get_viewport().push_input(arrow_click)
+	await get_tree().create_timer(0.1).timeout
+	_check(chat.follow_bottom and not chat.latest_button.visible, "Tapping the latest-message arrow reaches the button")
 	chat._jump_to_latest()
 	chat.composer.text = "Mesaj pe mai multe rânduri, vizibil în timpul scrierii.\n".repeat(8)
 	chat.composer.set_caret_line(chat.composer.get_line_count() - 1)

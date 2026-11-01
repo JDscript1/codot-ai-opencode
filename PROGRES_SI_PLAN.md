@@ -1,12 +1,42 @@
 # Godot AI Android — implementări, verificări și plan
 
-Ultima actualizare: **31 octombrie 2026**.
+Ultima actualizare: **1 noiembrie 2026**.
 
 Acesta este documentul de lucru al proiectului. Se actualizează după fiecare
 etapă importantă: implementare, verificare, compilare sau livrare. „Implementat
 în surse”, „testat în editor”, „compilat în APK” și „verificat pe dispozitiv”
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
+
+## AG-79 — săgeata „mergi la ultimul mesaj”: centrare și atingere — 1.11.2026
+
+**Defect raportat pe dispozitiv.** Săgeata care apare când cititorul urcă în
+istoric era ancorată în colțul din dreapta jos al zonei de conversație, nu
+centrată deasupra composer-ului. În plus, `_chat_touch` consuma orice atingere
+din dreptunghiul mesajelor înainte de GUI, iar butonul plutitor nu face parte
+din arborele `scroll`, deci apăsarea nu ajungea la el.
+
+**Corectat în surse.** `latest_button` folosește ancora
+`PRESET_CENTER_BOTTOM`, cu jumătate de lățime simetrică și aceeași distanță de
+12 px față de marginea de jos; creșterea pe orizontală este
+`GROW_DIRECTION_BOTH`, ca lățimea minimă să rămână centrată. `_chat_touch`
+ignoră atingerile din dreptunghiul butonului când acesta e vizibil, lăsând
+GUI-ului să proceseze apăsarea. Fluxul rămâne cel cerut: derulare în sus →
+săgeata apare; apăsare → salt la ultimul mesaj și urmărire; conținutul nou nu
+mai mișcă cititorul până la o nouă derulare în sus, când săgeata reapare.
+
+**Verificat local.** Fixture `chat_lifecycle`: 87/0 pe `phone_compact` și 87/0
+pe `phone_landscape`; `chat` pe `narrow` 82/0; `presentation` pe `phone_compact`
+139/0. Aserțiunile noi acoperă centrarea pe axa conversației, neconsumarea
+atingerii de press/release și un clic sintetic trimis prin viewport, care ajunge
+la buton, readuce `follow_bottom` și ascunde săgeata. Capturi:
+`.ai-qa/chat-arrow-centered-20261101/phone_compact/chat-history-arrow.png`,
+`.ai-qa/chat-arrow-click-20261101/` și
+`.ai-qa/chat-arrow-landscape-20261101/`. **Nu este încă în APK-ul din
+`Download`.**
+
+Jurnal: 1.11.2026 — AG-79, săgeata de urmărire centrată și apăsată prin GUI;
+comportamentul de blocare pe ultimele mesaje păstrat.
 
 ## AG-78 — sesiunea Ziva v3.3.3 pornește cu runtime-ul pregătit de gazdă — 31.10.2026
 

@@ -255,12 +255,13 @@ func _ready() -> void:
 	latest_button = icon_button(thread_area, "ArrowDown", "Mergi la ultimul mesaj și urmărește conversația", _jump_to_latest)
 	latest_button.name = "JumpToLatest"
 	latest_button.add_theme_stylebox_override("normal", style(Color("293145"), 20))
-	latest_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	latest_button.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	latest_button.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	latest_button.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	latest_button.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	latest_button.offset_left = -52 * EditorInterface.get_editor_scale()
-	latest_button.offset_top = -52 * EditorInterface.get_editor_scale()
-	latest_button.offset_right = -12 * EditorInterface.get_editor_scale()
+	var latest_half = 22 * EditorInterface.get_editor_scale()
+	latest_button.offset_left = -latest_half
+	latest_button.offset_right = latest_half
+	latest_button.offset_top = -56 * EditorInterface.get_editor_scale()
 	latest_button.offset_bottom = -12 * EditorInterface.get_editor_scale()
 	latest_button.hide()
 	scroll.get_v_scroll_bar().value_changed.connect(_scroll_changed)
@@ -2392,6 +2393,8 @@ func _native_touch_control(control: Control) -> bool:
 
 func _chat_touch(event: InputEvent) -> bool:
 	if not is_visible_in_tree() or scroll == null or (picker != null and picker.visible): return false
+	# The jump button floats above the message area; the GUI must receive its taps.
+	if latest_button != null and latest_button.visible and latest_button.get_global_rect().has_point(event.position): return false
 	if event is InputEventMouse and event.device == -1:
 		# Android dispatches the emulated mouse press BEFORE its native touch.
 		# Block that first press over messages too, before text selection begins.
