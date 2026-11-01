@@ -39,8 +39,8 @@ inclusiv descoperirea modelelor, cele patru rute, Bearer, versiunea Anthropic,
 tarifele și refuzul endpointului neîncrederii. Randările au trecut **955/0** în
 fiecare dintre cele cinci configurații, scenariile dedicate au raportat
 84/0–129/0, companionul are **9/9** teste, iar editorul nativ a trecut **986/0**
-în fiecare configurație. Jobul Android a verificat semnătura persoanei
-`sandbox`, package-ul `com.jdscript.godotai.debug`, ABI ARM64, bibliotecile
+în fiecare configurație. Jobul Android a verificat semnătura persistentă
+(`CN=Godot AI Android Debug, O=JDscript1`), package-ul `com.jdscript.godotai.debug`, ABI ARM64, bibliotecile
 native și scripturile încorporate. Verificarea statică locală a trecut pe
 fișierele GDScript modificate și pe `run.py`; parserul GDToolkit nu acceptă o
 construcție GDScript deja existentă din întregul `test_runtime.gd`, deci
