@@ -105,6 +105,27 @@ static func detail(rate: Dictionary) -> String:
 	return text
 
 static func from_api(item: Dictionary, issuer: String, source: String) -> Dictionary:
+	if issuer == "opencode":
+		var cost: Variant = item.get("cost", {})
+		if not cost is Dictionary: return {}
+		var text: Variant = cost.get("text", {})
+		if not text is Dictionary: return {}
+		var input_entry: Variant = text.get("input", {})
+		var output_entry: Variant = text.get("output", {})
+		if not input_entry is Dictionary or not output_entry is Dictionary: return {}
+		var input_value: Variant = input_entry.get("price")
+		var output_value: Variant = output_entry.get("price")
+		if input_value == null or output_value == null: return {}
+		if not str(input_value).is_valid_float() or not str(output_value).is_valid_float(): return {}
+		var incoming = float(input_value)
+		var outgoing = float(output_value)
+		if not is_finite(incoming) or not is_finite(outgoing) or incoming < 0 or outgoing < 0: return {}
+		var rate = {"input": incoming, "output": outgoing, "currency": "USD", "source": source, "source_kind": "api", "checked_at": Time.get_unix_time_from_system()}
+		var cache: Variant = input_entry.get("cache", {})
+		if cache is Dictionary:
+			var cached: Variant = cache.get("read")
+			if cached != null and str(cached).is_valid_float() and is_finite(float(cached)) and float(cached) >= 0: rate["cached_input"] = float(cached)
+		return rate
 	var value: Variant = item.get("pricing", {})
 	if not value is Dictionary: return {}
 	# OpenRouter explicitly documents USD per token. Other unlabeled numeric fields
@@ -136,7 +157,7 @@ func apply(profile: Dictionary, models: Array, stale: bool = false) -> void:
 		if billing != "api": model["pricing"] = {"mode": billing}; continue
 		if not profile.get("official_pricing", true): model["pricing"] = {"mode": "api"}; continue
 		var inline: Dictionary = model.get("pricing", {})
-		if inline.get("source_kind") == "api" and issuer != "openrouter": continue
+		if inline.get("source_kind") == "api" and issuer not in ["openrouter", "opencode"]: continue
 		if inline.get("source_kind") == "api" and float(inline.get("checked_at", 0)) >= float(entry.get("checked_at", 0)):
 			inline["stale"] = stale or entry.get("update_failed", false) or inline.get("stale", false) or Time.get_unix_time_from_system() - float(inline.get("checked_at", 0)) >= TTL
 			continue
@@ -153,6 +174,7 @@ func refresh(profile: Dictionary, models: Array, cancel: Dictionary = {}, force:
 	var issuer = str(profile.get("issuer", ""))
 	if mode(profile) != "api": apply(profile, models); return Common.success({"changed": false})
 	if not profile.get("official_pricing", true): apply(profile, models); return Common.success({"changed": false, "unavailable": true})
+	if issuer == "opencode": apply(profile, models); return Common.success({"changed": false, "inline": true})
 	if not FEEDS.has(issuer): apply(profile, models); return Common.success({"unavailable": true})
 	var previous: Dictionary = cache.get(issuer, {})
 	var age = Time.get_unix_time_from_system() - float(previous.get("checked_at", 0))

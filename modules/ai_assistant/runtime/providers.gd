@@ -11,6 +11,7 @@ const CATALOG = [
 	{"id": "gemini", "name": "Google Gemini", "kind": "gemini", "url": "https://generativelanguage.googleapis.com/v1beta", "prefix": "AIza"},
 	{"id": "deepseek", "name": "DeepSeek", "kind": "chat", "url": "https://api.deepseek.com", "prefix": ""},
 	{"id": "openrouter", "name": "OpenRouter", "kind": "chat", "url": "https://openrouter.ai/api/v1", "prefix": "sk-or-v1-"},
+	{"id": "opencode", "name": "OpenCode Zen", "kind": "chat", "url": "https://opencode.ai/zen/v1", "prefix": ""},
 	{"id": "qwen", "name": "Qwen International", "kind": "chat", "url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "prefix": ""},
 	{"id": "qwen-cn", "name": "Qwen China", "kind": "chat", "url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "prefix": ""},
 	{"id": "kimi", "name": "Kimi / Moonshot", "kind": "chat", "url": "https://api.moonshot.ai/v1", "prefix": ""},
@@ -26,6 +27,13 @@ const CATALOG = [
 	{"id": "llamacpp", "name": "llama.cpp", "kind": "chat", "url": "http://127.0.0.1:8080/v1", "prefix": "", "local": true},
 	{"id": "custom", "name": "OpenAI-compatible", "kind": "chat", "url": "", "prefix": ""},
 ]
+
+const OPENCODE_PROTOCOLS = {
+	"chat-completions": "chat",
+	"responses": "responses",
+	"messages": "anthropic",
+	"generate-content": "gemini",
+}
 
 var transport: RefCounted
 var vault: RefCounted
@@ -64,6 +72,69 @@ static func endpoint(profile: Dictionary) -> Dictionary:
 		url = str(normalized["result"])
 	var parsed = Common.parse_url(url, bool(profile.get("allow_http", false)))
 	return Common.success(url) if parsed.get("ok", false) else parsed
+
+static func _opencode_route(item: Dictionary) -> Dictionary:
+	var apis: Variant = item.get("api", {})
+	if not apis is Dictionary: return {}
+	for protocol in ["chat-completions", "responses", "messages", "generate-content"]:
+		var spec: Variant = apis.get(protocol, {})
+		if not spec is Dictionary: continue
+		var base_url = str(spec.get("base_url", "")).strip_edges().trim_suffix("/")
+		var kind = str(OPENCODE_PROTOCOLS.get(protocol, ""))
+		if base_url.is_empty() or kind.is_empty(): continue
+		return {"protocol": protocol, "kind": kind, "url": base_url}
+	return {}
+
+static func _opencode_model(item: Dictionary, source: String) -> Dictionary:
+	if str(item.get("type", "chat")) != "chat": return {}
+	var route = _opencode_route(item)
+	if route.is_empty(): return {}
+	var id = str(item.get("id", "")).trim_prefix("models/")
+	if id.is_empty(): return {}
+	var incoming: Variant = item.get("capabilities", {})
+	var capabilities = {}
+	var reasoning: Variant = {}
+	if incoming is Dictionary:
+		var tools: Variant = incoming.get("tools", {})
+		if tools is Dictionary and bool(tools.get("supported", false)): capabilities["tools"] = true
+		reasoning = incoming.get("reasoning", {})
+		if reasoning is Dictionary and bool(reasoning.get("supported", false)): capabilities["reasoning"] = true
+	var modalities: Variant = item.get("modalities", {})
+	if modalities is Dictionary:
+		var inputs: Variant = modalities.get("input", [])
+		if inputs is Array and inputs.any(func(value: Variant) -> bool: return str(value).to_lower().begins_with("image/")): capabilities["vision"] = true
+	var limit: Variant = item.get("limit", {})
+	var context = int(limit.get("context", 0)) if limit is Dictionary else 0
+	var output = int(limit.get("output", 0)) if limit is Dictionary else 0
+	var efforts: Array = []
+	if reasoning is Dictionary and reasoning.get("effort", []) is Array: efforts = reasoning["effort"].duplicate()
+	var result = {"id": id, "name": str(item.get("name", id)), "capabilities": capabilities, "context": context, "max_output_tokens": output, "efforts": efforts, "source": "live", "protocol": route["protocol"], "transport_url": route["url"]}
+	var price = ModelPricing.from_api(item, "opencode", source)
+	if not price.is_empty(): result["pricing"] = price
+	return result
+
+static func _trusted_opencode_url(url: String) -> bool:
+	var parsed = Common.parse_url(url, false)
+	if not parsed.get("ok", false) or str(parsed.get("scheme", "")) != "https": return false
+	var host = str(parsed.get("host", "")).to_lower()
+	return host == "opencode.ai" or host.ends_with(".opencode.ai")
+
+static func model_target(profile: Dictionary, model: String) -> Dictionary:
+	var resolved = endpoint(profile)
+	if not resolved.get("ok", false): return resolved
+	var issuer = str(profile.get("issuer", ""))
+	if issuer != "opencode": return Common.success({"kind": str(profile.get("kind", "chat")), "url": str(resolved["result"]), "protocol": str(profile.get("kind", "chat"))})
+	var record = {}
+	for item in profile.get("models", []):
+		if item is Dictionary and str(item.get("id", "")) == model:
+			record = item
+			break
+	if record.is_empty(): return Common.failure("Modelul OpenCode nu are metadate de rutare. Actualizează lista de modele.", "model_route_missing")
+	var protocol = str(record.get("protocol", ""))
+	var kind = str(OPENCODE_PROTOCOLS.get(protocol, ""))
+	var url = str(record.get("transport_url", "")).strip_edges().trim_suffix("/")
+	if kind.is_empty() or not _trusted_opencode_url(url): return Common.failure("Modelul OpenCode declară un protocol sau un endpoint nesuportat.", "unsupported_model_protocol")
+	return Common.success({"kind": kind, "url": url, "protocol": protocol})
 
 static func pricing_profile(profile: Dictionary) -> Dictionary:
 	var result = profile.duplicate(true)
@@ -199,12 +270,13 @@ static func detect(key: String, issuer: String = "") -> Dictionary:
 		var label = normalized.substr(0, assignment).trim_prefix("export ").to_lower().trim_suffix("_api_key")
 		normalized = normalized.substr(assignment + 1).strip_edges().trim_prefix("\"").trim_suffix("\"").trim_prefix("'").trim_suffix("'")
 		if issuer.is_empty(): issuer = label
+	if issuer == "opencode_zen": issuer = "opencode"
 	for entry in CATALOG:
 		if (not issuer.is_empty() and entry["id"] == issuer) or (issuer.is_empty() and not str(entry["prefix"]).is_empty() and normalized.begins_with(str(entry["prefix"]))):
 			return {"ok": true, "profile": entry.duplicate(true), "secret": normalized}
 	return Common.failure("Cheia este ambiguă. Alege furnizorul sau introdu adresa API.", "provider_ambiguous")
 
-func headers(profile: Dictionary, key_override: String = "") -> PackedStringArray:
+func headers(profile: Dictionary, key_override: String = "", kind_override: String = "") -> PackedStringArray:
 	var secret = key_override if not key_override.is_empty() else (vault.read(str(profile["id"])) if vault != null else "")
 	var stored: Variant = Common.parse_json(secret)
 	if profile.get("kind") != "siwc" and stored is Dictionary and stored.has("access_token"): return PackedStringArray()
@@ -212,7 +284,12 @@ func headers(profile: Dictionary, key_override: String = "") -> PackedStringArra
 		var tokens: Variant = Common.parse_json(secret)
 		secret = str(tokens.get("access_token", "")) if tokens is Dictionary else ""
 	var result = PackedStringArray()
-	match str(profile.get("kind", "chat")):
+	var kind = kind_override if not kind_override.is_empty() else str(profile.get("kind", "chat"))
+	if str(profile.get("issuer", "")) == "opencode":
+		if not secret.is_empty(): result.append("Authorization: Bearer " + secret)
+		if kind == "anthropic": result.append("anthropic-version: 2023-06-01")
+		return result
+	match kind:
 		"anthropic":
 			result.append("anthropic-version: 2023-06-01")
 			if not secret.is_empty(): result.append("x-api-key: " + secret)
@@ -240,6 +317,10 @@ func list_models(profile: Dictionary, cancel: Dictionary = {}, key_override: Str
 	var entries: Array = payload.get("data", payload.get("models", []))
 	for item in entries:
 		if not item is Dictionary: continue
+		if issuer == "opencode":
+			var converted = _opencode_model(item, url + "/models")
+			if not converted.is_empty(): models.append(converted)
+			continue
 		if profile.get("kind") == "siwc" and item.get("visibility", "list") != "list": continue
 		var id = str(item.get("id", item.get("slug", item.get("name", "")))).trim_prefix("models/")
 		if id.is_empty(): continue
@@ -273,10 +354,10 @@ func list_models(profile: Dictionary, cancel: Dictionary = {}, key_override: Str
 func complete(profile: Dictionary, messages: Array, tools: Array, model: String, effort: String, cancel: Dictionary, on_delta: Callable = Callable(), max_output_tokens: int = 0) -> Dictionary:
 	var credential_error = _credential_error(profile)
 	if not credential_error.is_empty(): return Common.failure(credential_error, "credential_type_mismatch")
-	var resolved = endpoint(profile)
-	if not resolved.get("ok", false): return resolved
+	var target = model_target(profile, model)
+	if not target.get("ok", false): return target
 	messages = normalize_context(profile, model, messages)
-	var kind = str(profile.get("kind", "chat"))
+	var kind = str(target["result"]["kind"])
 	if not tools.is_empty() and str(profile.get("issuer", profile.get("id", ""))) == "deepseek":
 		# DeepSeek thinking mode rejects tool requests where a prior assistant
 		# turn lacks reasoning_content; an empty replay satisfies it without
@@ -293,7 +374,7 @@ func complete(profile: Dictionary, messages: Array, tools: Array, model: String,
 		if not delta.is_empty() and on_delta.is_valid(): on_delta.call(delta)
 	var options = inference_options(profile, cancel)
 	options["on_event"] = receive
-	var result = await transport.request(str(resolved["result"]) + path, HTTPClient.METHOD_POST, headers(profile), wire["body"], options)
+	var result = await transport.request(str(target["result"]["url"]) + path, HTTPClient.METHOD_POST, headers(profile, "", kind), wire["body"], options)
 	if not result.get("ok", false):
 		if result.get("code") == "timeout" and result.get("stage") in ["response", "body"]: return Common.failure("Modelul nu a mai trimis date în intervalul de așteptare. Verifică încărcarea și resursele serverului înainte de reluare.", "inference_timeout")
 		return result

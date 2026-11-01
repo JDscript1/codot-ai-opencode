@@ -92,6 +92,26 @@ class ResponsesTransport:
 		for event in events: options["on_event"].call(event)
 		return {"ok": true, "events": events}
 
+class OpenCodeTransport:
+	extends RefCounted
+	var requests: Array = []
+	func request(url: String, _method: int, headers: PackedStringArray, body: Variant, options: Dictionary) -> Dictionary:
+		var captured_body = body.duplicate(true) if body is Dictionary or body is Array else body
+		requests.append({"url": url, "headers": headers.duplicate(), "body": captured_body})
+		var events: Array = []
+		if url.ends_with("/chat/completions"):
+			events = [{"choices": [{"delta": {"content": "OpenCode chat"}, "finish_reason": "stop"}]}]
+		elif url.ends_with("/responses"):
+			events = [{"type": "response.output_text.delta", "delta": "OpenCode responses"}, {"type": "response.completed", "response": {"output": [], "usage": {}}}]
+		elif url.ends_with("/messages"):
+			events = [{"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}, {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "OpenCode messages"}}, {"type": "content_block_stop", "index": 0}, {"type": "message_delta", "delta": {"stop_reason": "end_turn"}}, {"type": "message_stop"}]
+		else:
+			events = [{"candidates": [{"content": {"parts": [{"text": "OpenCode gemini"}]}, "finishReason": "STOP"}]}]
+		var callback = options.get("on_event", Callable())
+		for event in events:
+			if callback.is_valid(): callback.call(event)
+		return {"ok": true, "events": events}
+
 class ResponsesHost:
 	extends HarnessHost
 	var provider: RefCounted
@@ -116,6 +136,12 @@ func _model_pricing_tests(node: Node) -> void:
 	var pricing = scripts["model_pricing"]
 	var api = pricing.from_api({"pricing": {"prompt": "0.000002", "completion": "0.000008", "input_cache_read": "0.0000002"}}, "openrouter", "https://openrouter.ai/api/v1/models")
 	check(api["input"] == 2 and api["output"] == 8 and is_equal_approx(api["cached_input"], 0.2), "OpenRouter per-token prices convert exactly to per-million input, output and cache rates")
+	var opencode = pricing.from_api({"cost": {"text": {"input": {"price": 1.5, "cache": {"read": 0.15}}, "output": {"price": 9}}}}, "opencode", "https://opencode.ai/zen/v1/models")
+	check(opencode.get("input") == 1.5 and opencode.get("output") == 9 and is_equal_approx(opencode.get("cached_input"), 0.15), "OpenCode per-million prices and cache reads are parsed from the model catalog")
+	check(pricing.from_api({"cost": {"text": {"input": {"price": -1}, "output": {"price": 0}}}}, "opencode", "").is_empty(), "OpenCode negative prices fail closed")
+	var opencode_models = [{"id": "fixture-open", "pricing": opencode.duplicate(true)}]
+	pricing.new(node).apply({"issuer": "opencode", "kind": "chat", "official_pricing": true}, opencode_models)
+	check(opencode_models[0]["pricing"].get("input") == 1.5 and opencode_models[0]["pricing"].get("output") == 9, "OpenCode inline API tariffs survive the pricing cache pass")
 	check(pricing.from_api({"pricing": {"prompt": "-1", "completion": "0"}}, "openrouter", "").is_empty(), "Dynamic routers and negative tariffs are never treated as free models")
 	check(pricing.from_api({"pricing": {"prompt": "0.2", "completion": "0.3"}}, "deepseek", "").is_empty(), "Unknown price units and another provider's schema are never guessed")
 	check(pricing.rate_label({}).contains("nepublicat") and pricing.rate_label({"input": 0, "output": 0}).begins_with("0 / 0"), "Unpublished prices remain distinct from explicitly free API models")
@@ -296,6 +322,7 @@ func _run() -> void:
 	check(prioritized == ["192.168.3.8", "10.0.0.9", "172.16.2.9"] and providers.lan_targets(prioritized)[0]["host"] == "192.168.3.8", "Wi-Fi subnet is searched before VPN or cellular private addresses")
 	check(not providers.detect("sk-generic-fixture").get("ok", false), "Ambiguous keys never trigger issuer guessing")
 	check(providers.detect("DEEPSEEK_API_KEY=sk-generic-fixture").get("profile", {}).get("id") == "deepseek", "Labeled key determines issuer")
+	check(providers.detect("OPENCODE_API_KEY=sk-generic-fixture").get("profile", {}).get("id") == "opencode" and providers.detect("OPENCODE_ZEN_API_KEY=sk-generic-fixture").get("profile", {}).get("id") == "opencode", "OpenCode labels select the OpenCode Zen provider without guessing ambiguous raw keys")
 	var messages = [{"role": "system", "content": "Inspect"}, {"role": "user", "content": "Create"}, {"role": "assistant", "content": "", "reasoning_content": "Retained reasoning", "tool_calls": [{"id": "a", "name": "godot_project", "arguments": {}}]}, {"role": "tool", "tool_call_id": "a", "tool_name": "godot_project", "content": "{}"}]
 	var chat = providers.build_request("chat", messages, [], "fixture")
 	check(chat["body"]["messages"][2]["tool_calls"][0]["function"]["name"] == "godot_project", "Preserve multi-turn chat tool calls")
@@ -354,6 +381,7 @@ func _run() -> void:
 	if not mock_url.is_empty():
 		await _network_tests(node)
 		await _local_connection_tests(node)
+		await _opencode_tests(node)
 		await _cloud_generation_tests(node)
 		await _integration_tests(node)
 		await _store_tests(node)
@@ -1762,6 +1790,41 @@ func _local_connection_tests(node: Node) -> void:
 	var stopping = {"cancelled": false}
 	var stopped = await transport.request(mock_url + "/drip", HTTPClient.METHOD_GET, [], null, {"allow_http": true, "cancel": stopping, "idle_timeout": 2.0, "on_event": func(_event: Dictionary) -> void: stopping["cancelled"] = true})
 	check(stopped.get("code") == "cancelled", "Stop remains responsive during an otherwise healthy local stream")
+
+func _opencode_tests(node: Node) -> void:
+	var script = scripts["providers"]
+	var vault = FakeVault.new()
+	var service = script.new(node, vault)
+	vault.store("opencode", "opencode-fixture-token")
+	var profile = {"id": "opencode", "issuer": "opencode", "name": "OpenCode Zen", "kind": "chat", "url": mock_url + "/opencode/zen/v1", "allow_http": true}
+	var listed = await service.list_models(profile)
+	check(listed.get("ok", false) and listed.get("result", []).size() == 4, "OpenCode model discovery keeps supported chat models and skips embeddings or unknown protocols")
+	var by_id = {}
+	for model in listed.get("result", []): by_id[str(model.get("id", ""))] = model
+	check(by_id.get("fixture-open-chat", {}).get("protocol") == "chat-completions" and by_id.get("fixture-open-responses", {}).get("protocol") == "responses", "OpenCode catalog retains chat and Responses routing metadata")
+	check(by_id.get("fixture-open-messages", {}).get("protocol") == "messages" and by_id.get("fixture-open-gemini", {}).get("protocol") == "generate-content", "OpenCode catalog retains Anthropic and Gemini routing metadata")
+	check(by_id.get("fixture-open-chat", {}).get("capabilities", {}).get("vision", false) and by_id.get("fixture-open-chat", {}).get("context") == 200000 and by_id.get("fixture-open-chat", {}).get("efforts") == ["low", "high"], "OpenCode models preserve image support, context and reasoning levels")
+	check(by_id.get("fixture-open-chat", {}).get("pricing", {}).get("input") == 1.5 and by_id.get("fixture-open-chat", {}).get("pricing", {}).get("output") == 9, "OpenCode model discovery applies inline API tariffs")
+	var routed = profile.merged({"models": listed.get("result", [])}, true)
+	var expected = {"fixture-open-chat": "chat", "fixture-open-responses": "responses", "fixture-open-messages": "anthropic", "fixture-open-gemini": "gemini"}
+	for id in expected:
+		var target = script.model_target(routed, id)
+		check(target.get("ok", false) and target.get("result", {}).get("kind") == expected[id], "OpenCode maps " + id + " to its native protocol")
+	var fake = OpenCodeTransport.new()
+	service.transport = fake
+	var answers = {"fixture-open-chat": "OpenCode chat", "fixture-open-responses": "OpenCode responses", "fixture-open-messages": "OpenCode messages", "fixture-open-gemini": "OpenCode gemini"}
+	for id in answers:
+		var answer = await service.complete(routed, [{"role": "user", "content": "Ping"}], [], id, "", {})
+		check(answer.get("ok", false) and answer.get("message", {}).get("content") == answers[id], "OpenCode completes through " + expected[id])
+	check(fake.requests.size() == 4 and str(fake.requests[0]["url"]).ends_with("/openai/v1/chat/completions") and str(fake.requests[1]["url"]).ends_with("/openai/v1/responses"), "OpenCode uses each model's OpenAI-compatible endpoint and path")
+	check(str(fake.requests[2]["url"]).ends_with("/anthropic/v1/messages") and ":streamGenerateContent" in str(fake.requests[3]["url"]), "OpenCode uses the declared Anthropic and Gemini endpoints")
+	check(fake.requests.all(func(request: Dictionary) -> bool: return "Authorization: Bearer opencode-fixture-token" in request["headers"]), "OpenCode sends its API key as Bearer on every supported protocol")
+	check("anthropic-version: 2023-06-01" in fake.requests[2]["headers"] and not "anthropic-version: 2023-06-01" in fake.requests[0]["headers"], "OpenCode adds the Anthropic version only on its messages route")
+	var unsafe_models: Array = listed.get("result", []).duplicate(true)
+	unsafe_models.append({"id": "fixture-open-unsafe", "protocol": "chat-completions", "transport_url": "https://attacker.example/v1"})
+	var unsafe = routed.merged({"models": unsafe_models}, true)
+	var rejected = await service.complete(unsafe, [{"role": "user", "content": "Ping"}], [], "fixture-open-unsafe", "", {})
+	check(rejected.get("code") == "unsupported_model_protocol" and fake.requests.size() == 4, "OpenCode model routing rejects an untrusted endpoint before sending credentials")
 
 func _network_tests(node: Node) -> void:
 	var vault = FakeVault.new()

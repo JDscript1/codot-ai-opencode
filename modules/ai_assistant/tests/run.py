@@ -82,6 +82,18 @@ class Fixtures(http.server.BaseHTTPRequestHandler):
             valid = self.headers.get("Authorization") == "Bearer deepseek-fixture-token"
             self.reply({"data": [{"id": "deepseek-flash", "name": "DeepSeek-V4.1-Flash", "context_window": 1048576, "input_modalities": ["text", "image"], "effort": {"supported_levels": ["low", "high", "max"]}}, {"id": "deepseek-v4-pro", "name": "DeepSeek-V4-Pro", "context_window": 1048576, "input_modalities": ["text"], "effort": {"supported_levels": ["low", "high", "max"]}}]} if valid else {"error": "Unauthorized"}, 200 if valid else 401)
             return
+        if location.path == "/opencode/zen/v1/models":
+            valid = self.headers.get("Authorization") == "Bearer opencode-fixture-token"
+            models = [
+                {"id": "fixture-open-chat", "name": "Fixture OpenChat", "type": "chat", "modalities": {"input": ["text", "image/png"]}, "capabilities": {"tools": {"supported": True}, "reasoning": {"supported": True, "effort": ["low", "high"]}}, "limit": {"context": 200000, "output": 32000}, "cost": {"text": {"input": {"price": 1.5, "cache": {"read": 0.15}}, "output": {"price": 9}}}, "api": {"chat-completions": {"base_url": "https://opencode.ai/inference/openai/v1"}}},
+                {"id": "fixture-open-responses", "name": "Fixture OpenResponses", "type": "chat", "modalities": {"input": ["text"]}, "capabilities": {"tools": {"supported": True}, "reasoning": {"supported": True, "effort": ["medium", "high"]}}, "limit": {"context": 400000, "output": 64000}, "cost": {"text": {"input": {"price": 2, "cache": {"read": 0.2}}, "output": {"price": 10}}}, "api": {"responses": {"base_url": "https://opencode.ai/inference/openai/v1"}}},
+                {"id": "fixture-open-messages", "name": "Fixture OpenMessages", "type": "chat", "modalities": {"input": ["text", "image/jpeg"]}, "capabilities": {"tools": {"supported": True}, "reasoning": {"supported": True, "effort": ["low", "medium", "high"]}}, "limit": {"context": 1000000, "output": 128000}, "cost": {"text": {"input": {"price": 3, "cache": {"read": 0.3}}, "output": {"price": 15}}}, "api": {"messages": {"base_url": "https://opencode.ai/inference/anthropic/v1"}}},
+                {"id": "fixture-open-gemini", "name": "Fixture OpenGemini", "type": "chat", "modalities": {"input": ["text", "image/webp"]}, "capabilities": {"tools": {"supported": True}, "reasoning": {"supported": True, "effort": ["minimal", "high"]}}, "limit": {"context": 1048576, "output": 65536}, "cost": {"text": {"input": {"price": 1}, "output": {"price": 4}}}, "api": {"generate-content": {"base_url": "https://opencode.ai/inference/google/v1beta"}}},
+                {"id": "fixture-open-embedding", "name": "Fixture Embedding", "type": "embedding", "api": {"chat-completions": {"base_url": "https://opencode.ai/inference/openai/v1"}}},
+                {"id": "fixture-open-unknown", "name": "Fixture Unknown Protocol", "type": "chat", "api": {"future-protocol": {"base_url": "https://opencode.ai/inference/future/v1"}}},
+            ]
+            self.reply({"object": "list", "data": models} if valid else {"error": "Unauthorized"}, 200 if valid else 401)
+            return
         if location.path == "/local-lm/v1/models":
             self.reply({"data": [{"id": "local-code"}, {"id": "local-embedding"}]})
             return

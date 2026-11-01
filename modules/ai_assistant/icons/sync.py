@@ -14,7 +14,7 @@ REVISIONS = {
 }
 BRANDS = {
     'openai': 'openai', 'anthropic': 'anthropic', 'gemini': 'gemini-color',
-    'deepseek': 'deepseek-color', 'openrouter': 'openrouter', 'qwen': 'qwen-color',
+    'deepseek': 'deepseek-color', 'openrouter': 'openrouter', 'opencode': 'opencode', 'qwen': 'qwen-color',
     'kimi': 'kimi-color', 'mistral': 'mistral-color', 'groq': 'groq', 'xai': 'grok',
     'zai': 'zai', 'minimax': 'minimax-color', 'nvidia': 'nvidia-color',
     'siliconflow': 'siliconcloud-color', 'ollama': 'ollama', 'lmstudio': 'lmstudio',
@@ -35,7 +35,7 @@ ACTIONS = {
     'Chat': 'message-circle', 'Skills': 'book-open-check', 'Integrations': 'puzzle', 'Sound': 'volume-2',
     'Preview3D': 'box', 'Crop': 'crop', 'ArrowRight': 'arrow-right', 'Annotate': 'move-up-right',
     'Grid': 'grid-3x3', 'Light': 'sun', 'Wireframe': 'boxes', 'Reset': 'rotate-ccw',
-    'Compare': 'columns-2', 'Pin': 'pin', 'Animation': 'clapperboard',
+    'Compare': 'columns-2', 'Pin': 'pin', 'Animation': 'clapperboard', 'Undo': 'undo-2',
 }
 
 

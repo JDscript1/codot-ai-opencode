@@ -11,7 +11,10 @@ tab at the top right of the editor, next to **Asset Store**. Its **Setări** but
 opens the same global configuration window.
 
 - **Furnizori:** select an issuer or paste a distinctive API key. Generic keys such
-  as `sk-...` require an issuer selection. The current source queries models automatically after saving and can refresh an empty catalog from chat. The delivered APK still requires the separate test/list-models action. Manual model
+  as `sk-...` require an issuer selection. OpenCode Zen uses one API key and its
+  model catalog declares whether each model uses chat, Responses, Anthropic
+  messages or Gemini generation; the harness routes the selected model automatically.
+  The current source queries models automatically after saving and can refresh an empty catalog from chat. The delivered APK still requires the separate test/list-models action. Manual model
   IDs remain available for servers without a listing endpoint. Cloud and local/self-hosted
   services/profiles have separate headings. Advanced hosting overrides support a
   self-hosted server behind a public HTTPS domain.
