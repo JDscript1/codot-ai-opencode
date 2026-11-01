@@ -1804,6 +1804,7 @@ func _opencode_tests(node: Node) -> void:
 	check(by_id.get("fixture-open-chat", {}).get("protocol") == "chat-completions" and by_id.get("fixture-open-responses", {}).get("protocol") == "responses", "OpenCode catalog retains chat and Responses routing metadata")
 	check(by_id.get("fixture-open-messages", {}).get("protocol") == "messages" and by_id.get("fixture-open-gemini", {}).get("protocol") == "generate-content", "OpenCode catalog retains Anthropic and Gemini routing metadata")
 	check(by_id.get("fixture-open-chat", {}).get("capabilities", {}).get("vision", false) and by_id.get("fixture-open-chat", {}).get("context") == 200000 and by_id.get("fixture-open-chat", {}).get("efforts") == ["low", "high"], "OpenCode models preserve image support, context and reasoning levels")
+	check(by_id.get("fixture-open-chat", {}).get("reasoning_field") == "reasoning_content", "OpenCode preserves the reasoning replay field declared by chat models")
 	check(by_id.get("fixture-open-chat", {}).get("pricing", {}).get("input") == 1.5 and by_id.get("fixture-open-chat", {}).get("pricing", {}).get("output") == 9, "OpenCode model discovery applies inline API tariffs")
 	var routed = profile.merged({"models": listed.get("result", [])}, true)
 	var expected = {"fixture-open-chat": "chat", "fixture-open-responses": "responses", "fixture-open-messages": "anthropic", "fixture-open-gemini": "gemini"}
@@ -1820,11 +1821,14 @@ func _opencode_tests(node: Node) -> void:
 	check(str(fake.requests[2]["url"]).ends_with("/anthropic/v1/messages") and ":streamGenerateContent" in str(fake.requests[3]["url"]), "OpenCode uses the declared Anthropic and Gemini endpoints")
 	check(fake.requests.all(func(request: Dictionary) -> bool: return "Authorization: Bearer opencode-fixture-token" in request["headers"]), "OpenCode sends its API key as Bearer on every supported protocol")
 	check("anthropic-version: 2023-06-01" in fake.requests[2]["headers"] and not "anthropic-version: 2023-06-01" in fake.requests[0]["headers"], "OpenCode adds the Anthropic version only on its messages route")
+	var reasoning_messages = [{"role": "user", "content": "Use the fixture tool"}, {"role": "assistant", "content": "", "wire_source": "opencode:fixture-open-chat", "tool_calls": [{"id": "reasoning-call", "name": "fixture", "arguments": {}}]}, {"role": "tool", "tool_call_id": "reasoning-call", "tool_name": "fixture", "content": "{}"}]
+	var reasoning_answer = await service.complete(routed, reasoning_messages, [scripts["common"].tool("fixture", "Fixture", {}, [])], "fixture-open-chat", "", {})
+	check(reasoning_answer.get("ok", false) and fake.requests[-1]["body"]["messages"][1].has("reasoning_content"), "OpenCode chat tool loops replay an empty reasoning field when the prior turn did not retain one")
 	var unsafe_models: Array = listed.get("result", []).duplicate(true)
 	unsafe_models.append({"id": "fixture-open-unsafe", "protocol": "chat-completions", "transport_url": "https://attacker.example/v1"})
 	var unsafe = routed.merged({"models": unsafe_models}, true)
 	var rejected = await service.complete(unsafe, [{"role": "user", "content": "Ping"}], [], "fixture-open-unsafe", "", {})
-	check(rejected.get("code") == "unsupported_model_protocol" and fake.requests.size() == 4, "OpenCode model routing rejects an untrusted endpoint before sending credentials")
+	check(rejected.get("code") == "unsupported_model_protocol" and fake.requests.size() == 5, "OpenCode model routing rejects an untrusted endpoint before sending credentials")
 
 func _network_tests(node: Node) -> void:
 	var vault = FakeVault.new()

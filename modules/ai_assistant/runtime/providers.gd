@@ -82,7 +82,9 @@ static func _opencode_route(item: Dictionary) -> Dictionary:
 		var base_url = str(spec.get("base_url", "")).strip_edges().trim_suffix("/")
 		var kind = str(OPENCODE_PROTOCOLS.get(protocol, ""))
 		if base_url.is_empty() or kind.is_empty(): continue
-		return {"protocol": protocol, "kind": kind, "url": base_url}
+		var compatibility: Variant = spec.get("compatibility", {})
+		var reasoning_field = str(compatibility.get("reasoning_field", "")) if compatibility is Dictionary else ""
+		return {"protocol": protocol, "kind": kind, "url": base_url, "reasoning_field": reasoning_field}
 	return {}
 
 static func _opencode_model(item: Dictionary, source: String) -> Dictionary:
@@ -108,7 +110,7 @@ static func _opencode_model(item: Dictionary, source: String) -> Dictionary:
 	var output = int(limit.get("output", 0)) if limit is Dictionary else 0
 	var efforts: Array = []
 	if reasoning is Dictionary and reasoning.get("effort", []) is Array: efforts = reasoning["effort"].duplicate()
-	var result = {"id": id, "name": str(item.get("name", id)), "capabilities": capabilities, "context": context, "max_output_tokens": output, "efforts": efforts, "source": "live", "protocol": route["protocol"], "transport_url": route["url"]}
+	var result = {"id": id, "name": str(item.get("name", id)), "capabilities": capabilities, "context": context, "max_output_tokens": output, "efforts": efforts, "source": "live", "protocol": route["protocol"], "transport_url": route["url"], "reasoning_field": route.get("reasoning_field", "")}
 	var price = ModelPricing.from_api(item, "opencode", source)
 	if not price.is_empty(): result["pricing"] = price
 	return result
@@ -119,16 +121,17 @@ static func _trusted_opencode_url(url: String) -> bool:
 	var host = str(parsed.get("host", "")).to_lower()
 	return host == "opencode.ai" or host.ends_with(".opencode.ai")
 
+static func _model_record(profile: Dictionary, model: String) -> Dictionary:
+	for item in profile.get("models", []):
+		if item is Dictionary and str(item.get("id", "")) == model: return item
+	return {}
+
 static func model_target(profile: Dictionary, model: String) -> Dictionary:
 	var resolved = endpoint(profile)
 	if not resolved.get("ok", false): return resolved
 	var issuer = str(profile.get("issuer", ""))
 	if issuer != "opencode": return Common.success({"kind": str(profile.get("kind", "chat")), "url": str(resolved["result"]), "protocol": str(profile.get("kind", "chat"))})
-	var record = {}
-	for item in profile.get("models", []):
-		if item is Dictionary and str(item.get("id", "")) == model:
-			record = item
-			break
+	var record = _model_record(profile, model)
 	if record.is_empty(): return Common.failure("Modelul OpenCode nu are metadate de rutare. Actualizează lista de modele.", "model_route_missing")
 	var protocol = str(record.get("protocol", ""))
 	var kind = str(OPENCODE_PROTOCOLS.get(protocol, ""))
@@ -357,11 +360,13 @@ func complete(profile: Dictionary, messages: Array, tools: Array, model: String,
 	var target = model_target(profile, model)
 	if not target.get("ok", false): return target
 	messages = normalize_context(profile, model, messages)
+	var issuer = str(profile.get("issuer", profile.get("id", "")))
 	var kind = str(target["result"]["kind"])
-	if not tools.is_empty() and str(profile.get("issuer", profile.get("id", ""))) == "deepseek":
-		# DeepSeek thinking mode rejects tool requests where a prior assistant
-		# turn lacks reasoning_content; an empty replay satisfies it without
-		# resending foreign or legacy reasoning.
+	var reasoning_field = str(_model_record(profile, model).get("reasoning_field", "")) if issuer == "opencode" else ""
+	if not tools.is_empty() and (issuer == "deepseek" or reasoning_field == "reasoning_content"):
+		# DeepSeek and some OpenCode chat models reject tool requests where a
+		# prior assistant turn lacks reasoning_content; an empty replay satisfies
+		# it without resending foreign or legacy reasoning.
 		for message in messages:
 			if message.get("role") == "assistant" and not message.has("reasoning_content"): message["reasoning_content"] = ""
 	var wire = build_request(kind, messages, tools, model, effort, max_output_tokens)
