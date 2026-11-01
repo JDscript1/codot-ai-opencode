@@ -34,13 +34,18 @@ inline din catalog sunt păstrate, nu înlocuite de un feed inexistent.
 
 **Verificat în GitHub Actions.** Rularea
 [41326923137](https://github.com/JDscript1/godot-ai-android/actions/runs/41326923137)
-a trecut pasul `Test embedded runtime with upstream Godot`, care include
-aserțiunile noi pentru descoperirea modelelor, cele patru rute, Bearer,
-versiunea Anthropic, tarife și refuzul endpointului neîncrederii. Verificarea
-statică locală a trecut pe fișierele GDScript modificate și pe `run.py`; parserul
-GDToolkit nu acceptă o construcție GDScript deja existentă din întregul
-`test_runtime.gd`, deci fișierul complet este validat de Godot în CI. Catalogul
-public OpenCode a fost citit separat, fără cheie și fără inferență.
+a trecut toate cele trei joburi. Suita runtime a raportat **970/0** aserțiuni,
+inclusiv descoperirea modelelor, cele patru rute, Bearer, versiunea Anthropic,
+tarifele și refuzul endpointului neîncrederii. Randările au trecut **955/0** în
+fiecare dintre cele cinci configurații, scenariile dedicate au raportat
+84/0–129/0, companionul are **9/9** teste, iar editorul nativ a trecut **986/0**
+în fiecare configurație. Jobul Android a verificat semnătura persoanei
+`sandbox`, package-ul `com.jdscript.godotai.debug`, ABI ARM64, bibliotecile
+native și scripturile încorporate. Verificarea statică locală a trecut pe
+fișierele GDScript modificate și pe `run.py`; parserul GDToolkit nu acceptă o
+construcție GDScript deja existentă din întregul `test_runtime.gd`, deci
+fișierul complet a fost validat de Godot în CI. Catalogul public OpenCode a
+fost citit separat, fără cheie și fără inferență.
 
 **Limite.** Nu s-a făcut o cerere live cu o cheie OpenCode și nu s-a instalat
 sau testat fizic APK-ul rezultat în această etapă. Testele folosesc fixture-ul
