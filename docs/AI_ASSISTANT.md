@@ -14,6 +14,8 @@ opens the same global configuration window.
   as `sk-...` require an issuer selection. OpenCode Zen uses one API key and its
   model catalog declares whether each model uses chat, Responses, Anthropic
   messages or Gemini generation; the harness routes the selected model automatically.
+  OpenCode can restrict free-tier models to its own client, so another MCP/API
+  client may receive HTTP 403 even with a valid key; paid models are not affected.
   The current source queries models automatically after saving and can refresh an empty catalog from chat. The delivered APK still requires the separate test/list-models action. Manual model
   IDs remain available for servers without a listing endpoint. Cloud and local/self-hosted
   services/profiles have separate headings. Advanced hosting overrides support a

@@ -8,6 +8,57 @@ etapă importantă: implementare, verificare, compilare sau livrare. „Implemen
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
 
+## AG-80 — OpenCode Zen ca furnizor API cu rutare pe model — 1.11.2026
+
+**Cerință.** Utilizatorul a cerut suport pentru cheia API OpenCode în lista de
+furnizori a proiectului.
+
+**Implementat în surse.** Catalogul are acum `OpenCode Zen`, cu endpointul
+public `https://opencode.ai/zen/v1` și acceptarea etichetelor
+`OPENCODE_API_KEY` și `OPENCODE_ZEN_API_KEY`; cheile brute `sk-...` rămân
+ambigue și cer selectarea explicită a furnizorului. Catalogul oficial
+`/zen/v1/models` descrie 78 de modele în patru protocoale: 24 prin
+`chat/completions`, 31 prin `responses`, 17 prin endpointul Anthropic
+`messages` și 6 prin `generateContent`. Fiecare model păstrează protocolul,
+endpointul de inferență declarat, contextul, limita de ieșire, nivelurile de
+reasoning, suportul pentru imagini și tarifele USD/1M tokeni din catalog.
+Selectarea unui model rutează automat cererea și fluxul SSE către protocolul
+lui nativ; autentificarea este `Authorization: Bearer`, iar
+`anthropic-version: 2023-06-01` se adaugă numai pe ruta Anthropic. Modelele de
+embedding și protocoalele necunoscute sunt excluse, iar un endpoint de
+inferență care nu aparține domeniului HTTPS `opencode.ai` este refuzat înainte
+de trimiterea cheii. Pentru cele 22 de modele chat care declară
+`compatibility.reasoning_field=reasoning_content`, buclele cu unelte primesc
+câmpul gol cerut de protocol, fără a reutiliza reasoning străin. Tarifele
+inline din catalog sunt păstrate, nu înlocuite de un feed inexistent.
+
+**Verificat în GitHub Actions.** Rularea
+[41326923137](https://github.com/JDscript1/godot-ai-android/actions/runs/41326923137)
+a trecut pasul `Test embedded runtime with upstream Godot`, care include
+aserțiunile noi pentru descoperirea modelelor, cele patru rute, Bearer,
+versiunea Anthropic, tarife și refuzul endpointului neîncrederii. Verificarea
+statică locală a trecut pe fișierele GDScript modificate și pe `run.py`; parserul
+GDToolkit nu acceptă o construcție GDScript deja existentă din întregul
+`test_runtime.gd`, deci fișierul complet este validat de Godot în CI. Catalogul
+public OpenCode a fost citit separat, fără cheie și fără inferență.
+
+**Limite.** Nu s-a făcut o cerere live cu o cheie OpenCode și nu s-a instalat
+sau testat fizic APK-ul rezultat în această etapă. Testele folosesc fixture-ul
+HTTP determinist; disponibilitatea modelelor pentru contul utilizatorului și
+comportamentul fiecărui furnizor rămân de confirmat pe dispozitiv. OpenCode
+limitează oficial modelele free-tier la clientul său, deci un client extern
+poate primi HTTP 403 cu o cheie validă; modelele plătite nu au această
+restricție. Build-ul standard din rularea de mai sus a trecut și a produs
+`Godot-AI-Android-arm64-9bd6188-debug.apk`, package
+`com.jdscript.godotai.debug`, 112.597.054 bytes, SHA-256
+`303e6acb661fe6dfc3cbb191bb2792903c624686a26ca6439059776299a5b092`.
+Artefactul verificat este în
+`/storage/emulated/0/Download/Godot-AI-Android-arm64-9bd6188-debug.apk`, cu
+checksum alăturat; nu a fost instalat automat.
+
+Jurnal: 1.11.2026 — AG-80, OpenCode Zen adăugat cu descoperirea catalogului,
+rutare pe patru protocoale, tarife inline și replay pentru reasoning.
+
 ## AG-79 — săgeata „mergi la ultimul mesaj”: centrare și atingere — 1.11.2026
 
 **Defect raportat pe dispozitiv.** Săgeata care apare când cititorul urcă în
