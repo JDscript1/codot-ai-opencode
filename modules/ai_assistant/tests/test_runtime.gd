@@ -1835,7 +1835,7 @@ func _omniroute_tests(node: Node) -> void:
 	check(script.hosting({"issuer": "omniroute"}) == "local", "OmniRoute is grouped as a local/self-hosted service")
 	for entry in [["192.168.1.50", "omniroute", "http://192.168.1.50:20128/v1"], ["10.146.52.179:20128", "omniroute", "http://10.146.52.179:20128/v1"], ["http://127.0.0.1:20128/v1/models", "omniroute", "http://127.0.0.1:20128/v1"]]:
 		check(script.local_endpoint(entry[0], entry[1]).get("result") == entry[2], "OmniRoute accepts a Termux loopback or hotspot IP and fills port 20128 with /v1: " + entry[0])
-	check(script.endpoint({"issuer": "omniroute", "url": "192.168.1.50"}).get("result") == "http://192.168.1.50:20128/v1", "An OmniRoute profile normalizes a bare LAN address to its default OpenAI-compatible endpoint")
+	check(script.endpoint({"issuer": "omniroute", "url": "192.168.1.50", "allow_http": true}).get("result") == "http://192.168.1.50:20128/v1", "An OmniRoute profile normalizes a bare LAN address to its default OpenAI-compatible endpoint after explicit HTTP opt-in")
 	check(script.detect("OMNIROUTE_API_KEY=omniroute-fixture-key").get("profile", {}).get("id") == "omniroute", "OMNIROUTE_API_KEY selects OmniRoute without guessing a raw key")
 	var vault = FakeVault.new()
 	var service = script.new(node, vault)
