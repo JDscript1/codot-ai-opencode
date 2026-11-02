@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<title>OpenCode</title>
+<link rel="stylesheet" href="xterm.css">
+<style>
+  :root { color-scheme: dark; --app-height: 100vh; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #101016; }
+  body { font-family: system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
+  #app { display: flex; flex-direction: column; height: var(--app-height); width: 100vw; }
+  #terminal { flex: 1 1 auto; min-height: 0; padding: 6px 2px 0 8px; background: #101016; }
+  #terminal .xterm { height: 100%; }
+  #terminal .xterm-viewport { background: transparent !important; }
+  #keys {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
+    padding: 5px 6px calc(5px + env(safe-area-inset-bottom)); overflow-x: auto;
+    background: #171a23; border-top: 1px solid #262a36; -webkit-user-select: none; user-select: none;
+  }
+  #keys button {
+    flex: 0 0 auto; min-width: 38px; height: 34px; padding: 0 9px; border-radius: 7px;
+    border: 1px solid #303646; background: #212633; color: #d7deee; font-size: 13px;
+    font-family: ui-monospace, monospace; touch-action: manipulation;
+  }
+  #keys button:active, #keys button.on { background: #33507a; border-color: #4b79b8; color: #fff; }
+  #keys .spacer { flex: 1 1 auto; }
+  #status {
+    position: absolute; top: 4px; right: 8px; font-size: 10px; color: #6c768c;
+    pointer-events: none; font-family: ui-monospace, monospace;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="terminal"></div>
+  <div id="keys">
+    <button type="button" data-key="esc">Esc</button>
+    <button type="button" data-key="tab">Tab</button>
+    <button type="button" id="ctrl" title="Ctrl pentru următoarea tastă">Ctrl</button>
+    <button type="button" data-key="left">←</button>
+    <button type="button" data-key="up">↑</button>
+    <button type="button" data-key="down">↓</button>
+    <button type="button" data-key="right">→</button>
+    <button type="button" data-key="ctrlc">^C</button>
+    <button type="button" id="paste">Lipire</button>
+    <button type="button" id="smaller">A−</button>
+    <button type="button" id="larger">A+</button>
+    <button type="button" id="keyboard">Tastatură</button>
+  </div>
+</div>
+<div id="status">OpenCode</div>
+<script src="xterm.js"></script>
+<script src="addon-fit.js"></script>
+<script>
+(function () {
+  "use strict";
+  var KEYS = {
+    esc: "\u001b", tab: "\t", left: "\u001b[D", up: "\u001b[A",
+    down: "\u001b[B", right: "\u001b[C", ctrlc: "\u0003"
+  };
+  var term = new Terminal({
+    allowProposedApi: true,
+    convertEol: false,
+    cursorBlink: true,
+    cursorStyle: "bar",
+    fontSize: 13,
+    lineHeight: 1.12,
+    scrollback: 12000,
+    fontFamily: 'ui-monospace, "DejaVu Sans Mono", "Liberation Mono", monospace',
+    theme: {
+      background: "#101016", foreground: "#d7deee", cursor: "#7fb4ff",
+      selectionBackground: "#33507a", black: "#101016", red: "#ff6b81",
+      green: "#7ee787", yellow: "#ffd479", blue: "#7fb4ff", magenta: "#d2a8ff",
+      cyan: "#76e3ea", white: "#d7deee", brightBlack: "#6c768c"
+    }
+  });
+  var fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(document.getElementById("terminal"));
+  var ctrl = false;
+  var lastCols = 0, lastRows = 0;
+
+  function base64(text) {
+    var bytes = new TextEncoder().encode(text);
+    var binary = "";
+    for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+  function send(text) {
+    if (window.GodotTerminal && GodotTerminal.input) GodotTerminal.input(base64(text));
+  }
+  function sendBytes(bytes) {
+    var binary = "";
+    for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    if (window.GodotTerminal && GodotTerminal.input) GodotTerminal.input(btoa(binary));
+  }
+  function resize() {
+    if (!window.GodotTerminal) return;
+    try { fit.fit(); } catch (error) { return; }
+    if (term.cols > 0 && term.rows > 0 && (term.cols !== lastCols || term.rows !== lastRows)) {
+      lastCols = term.cols; lastRows = term.rows;
+      GodotTerminal.resize(term.cols, term.rows);
+    }
+  }
+  var resizeTimer = 0;
+  function resizeSoon() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(resize, 60);
+  }
+
+  term.onData(function (data) {
+    if (ctrl && data.length === 1) {
+      var code = data.toUpperCase().charCodeAt(0);
+      if (code >= 64 && code <= 95) data = String.fromCharCode(code - 64);
+      setCtrl(false);
+    }
+    send(data);
+  });
+  term.onBinary(function (data) {
+    var bytes = new Uint8Array(data.length);
+    for (var i = 0; i < data.length; i++) bytes[i] = data.charCodeAt(i) & 255;
+    sendBytes(bytes);
+  });
+
+  function setCtrl(value) {
+    ctrl = value;
+    document.getElementById("ctrl").classList.toggle("on", value);
+  }
+  document.getElementById("ctrl").addEventListener("click", function (event) {
+    event.preventDefault();
+    setCtrl(!ctrl);
+    term.focus();
+  });
+  document.querySelectorAll("#keys button[data-key]").forEach(function (button) {
+    button.addEventListener("click", function (event) {
+      event.preventDefault();
+      send(KEYS[button.getAttribute("data-key")] || "");
+      term.focus();
+    });
+  });
+  document.getElementById("paste").addEventListener("click", function (event) {
+    event.preventDefault();
+    if (window.GodotTerminal && GodotTerminal.paste) GodotTerminal.paste();
+    term.focus();
+  });
+  document.getElementById("keyboard").addEventListener("click", function (event) {
+    event.preventDefault();
+    if (term.textarea) term.textarea.focus();
+  });
+  var fontSize = 13;
+  function changeFont(delta) {
+    fontSize = Math.max(9, Math.min(22, fontSize + delta));
+    term.options.fontSize = fontSize;
+    resizeSoon();
+  }
+  document.getElementById("smaller").addEventListener("click", function (event) { event.preventDefault(); changeFont(-1); });
+  document.getElementById("larger").addEventListener("click", function (event) { event.preventDefault(); changeFont(1); });
+
+  // Keyboard helpers must not steal focus from xterm's hidden textarea.
+  document.querySelectorAll("#keys button").forEach(function (button) {
+    button.addEventListener("mousedown", function (event) { event.preventDefault(); });
+  });
+
+  function layout() {
+    var height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty("--app-height", height + "px");
+    resizeSoon();
+  }
+  window.addEventListener("resize", layout);
+  window.addEventListener("orientationchange", function () { setTimeout(layout, 120); });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", layout);
+    window.visualViewport.addEventListener("scroll", layout);
+  }
+  if (window.ResizeObserver) new ResizeObserver(resizeSoon).observe(document.getElementById("terminal"));
+
+  // xterm -> app
+  function writeBytes(encoded) {
+    var binary = atob(encoded);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    term.write(bytes);
+  }
+  window.opencodeWrite = writeBytes;
+  window.opencodeResync = function (encoded) { term.reset(); writeBytes(encoded); };
+  window.opencodePaste = function (text) { term.paste(text); term.focus(); };
+  window.opencodeDismissKeyboard = function () {
+    if (term.textarea) term.textarea.blur();
+    if (window.GodotTerminal && GodotTerminal.dismissKeyboard) GodotTerminal.dismissKeyboard();
+  };
+  window.opencodeResize = resize;
+
+  if (term.textarea) {
+    term.textarea.setAttribute("autocapitalize", "off");
+    term.textarea.setAttribute("autocomplete", "off");
+    term.textarea.setAttribute("autocorrect", "off");
+    term.textarea.setAttribute("spellcheck", "false");
+    term.textarea.setAttribute("inputmode", "text");
+  }
+  document.getElementById("terminal").addEventListener("touchend", function () { term.focus(); }, { passive: true });
+  term.focus();
+  layout();
+  setTimeout(function () {
+    layout();
+    if (window.GodotTerminal && GodotTerminal.ready) GodotTerminal.ready();
+  }, 120);
+})();
+</script>
+</body>
+</html>

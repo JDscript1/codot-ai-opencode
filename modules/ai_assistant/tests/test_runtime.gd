@@ -44,6 +44,23 @@ class NativePanelBridge:
 		calls.append(args)
 		return {"ok": true, "result": {"available": true, "collected": false, "section": section, "items": []}}
 
+class OpenCodeMCPPanelBridge:
+	extends Node
+	var searches = []
+	var executions = []
+	func opencode_search(query: String, limit: int = 20) -> Dictionary:
+		searches.append([query, limit])
+		return {"ok": true, "result": [{"name": "godot_create_node", "description": "Create a node", "risk": "write"}]}
+	func opencode_describe(name: String) -> Dictionary:
+		if name != "godot_create_node":
+			return {"ok": false, "error": "unknown"}
+		return {"ok": true, "result": {"name": name, "inputSchema": {"type": "object"}}}
+	func opencode_execute(name: String, arguments: Dictionary) -> Dictionary:
+		executions.append([name, arguments])
+		if name == "editor_capture":
+			return {"ok": true, "result": {"ok": true}, "images": [{"mimeType": "image/png", "data": "aGVsbG8="}]}
+		return {"ok": true, "result": {"ok": true, "name": name}}
+
 class HarnessHost:
 	extends RefCounted
 	var replies: Array = []
@@ -273,7 +290,7 @@ func _run() -> void:
 		push_error("Pass -- --source=/absolute/path/to/modules/ai_assistant")
 		quit(2)
 		return
-	for name in ["common", "engineering_store", "qa_scenarios", "asset_audit", "experiments", "engineering", "project_knowledge", "diagnostics", "verification", "diff", "change_set", "transport", "tool_registry", "model_pricing", "providers", "panel_reader", "editor_tools", "mcp", "asset_exports", "generation_catalog", "assets", "accounts", "conversations", "icons", "planner", "markdown", "tool_preview", "diagram", "file_registry", "model_preview", "media_view", "chat_view", "harness", "agent_jobs", "speech", "workspace", "termux_blender", "linux_runtime", "ziva", "ziva_screen", "integrations", "store", "editor_control", "panel"]:
+	for name in ["common", "engineering_store", "qa_scenarios", "asset_audit", "experiments", "engineering", "project_knowledge", "diagnostics", "verification", "diff", "change_set", "transport", "tool_registry", "model_pricing", "providers", "panel_reader", "editor_tools", "mcp", "asset_exports", "generation_catalog", "assets", "accounts", "conversations", "icons", "planner", "markdown", "tool_preview", "diagram", "file_registry", "model_preview", "media_view", "chat_view", "harness", "agent_jobs", "speech", "workspace", "termux_blender", "linux_runtime", "ziva", "ziva_screen", "integrations", "store", "editor_control", "opencode_mcp", "opencode", "opencode_screen", "panel"]:
 		var script = GDScript.new()
 		script.take_over_path("res://__godot_ai_builtin__/" + name + ".gd")
 		script.source_code = FileAccess.get_file_as_string(source_directory.path_join("runtime/" + name + ".gd"))
@@ -282,7 +299,7 @@ func _run() -> void:
 		if error != OK:
 			quit(1)
 			return
-		var bindings = {"common": "Common", "engineering_store": "EngineeringStore", "qa_scenarios": "QAScenarios", "asset_audit": "AssetAudit", "experiments": "Experiments", "engineering": "Engineering", "project_knowledge": "ProjectKnowledge", "diagnostics": "Diagnostics", "verification": "Verification", "diff": "Diff", "change_set": "ChangeSet", "transport": "Transport", "tool_registry": "ToolRegistry", "model_pricing": "ModelPricing", "providers": "Providers", "panel_reader": "PanelReader", "editor_tools": "Tools", "mcp": "MCP", "asset_exports": "AssetExports", "generation_catalog": "GenerationCatalog", "assets": "Assets", "accounts": "Accounts", "conversations": "Conversations", "icons": "Icons", "planner": "Planner", "markdown": "Markdown", "tool_preview": "ToolPreview", "diagram": "Diagram", "file_registry": "FileRegistry", "model_preview": "ModelPreview", "media_view": "MediaView", "chat_view": "ChatView", "harness": "Harness", "agent_jobs": "AgentJobs", "speech": "Speech", "workspace": "Workspace", "termux_blender": "TermuxBlender", "linux_runtime": "LinuxRuntime", "ziva": "Ziva", "ziva_screen": "ZivaScreen", "integrations": "Integrations", "store": "Store", "editor_control": "EditorControl"}
+		var bindings = {"common": "Common", "engineering_store": "EngineeringStore", "qa_scenarios": "QAScenarios", "asset_audit": "AssetAudit", "experiments": "Experiments", "engineering": "Engineering", "project_knowledge": "ProjectKnowledge", "diagnostics": "Diagnostics", "verification": "Verification", "diff": "Diff", "change_set": "ChangeSet", "transport": "Transport", "tool_registry": "ToolRegistry", "model_pricing": "ModelPricing", "providers": "Providers", "panel_reader": "PanelReader", "editor_tools": "Tools", "mcp": "MCP", "asset_exports": "AssetExports", "generation_catalog": "GenerationCatalog", "assets": "Assets", "accounts": "Accounts", "conversations": "Conversations", "icons": "Icons", "planner": "Planner", "markdown": "Markdown", "tool_preview": "ToolPreview", "diagram": "Diagram", "file_registry": "FileRegistry", "model_preview": "ModelPreview", "media_view": "MediaView", "chat_view": "ChatView", "harness": "Harness", "agent_jobs": "AgentJobs", "speech": "Speech", "workspace": "Workspace", "termux_blender": "TermuxBlender", "linux_runtime": "LinuxRuntime", "ziva": "Ziva", "ziva_screen": "ZivaScreen", "integrations": "Integrations", "store": "Store", "editor_control": "EditorControl", "opencode_mcp": "OpenCodeMCP", "opencode": "OpenCode", "opencode_screen": "OpenCodeScreen"}
 		for dependency in scripts: script.set(bindings[dependency], scripts[dependency])
 		scripts[name] = script
 	var common = scripts["common"]
@@ -397,6 +414,7 @@ func _run() -> void:
 		await _cloud_generation_tests(node)
 		await _integration_tests(node)
 		await _store_tests(node)
+	await _opencode_mcp_tests()
 	node.queue_free()
 	await process_frame
 	print("Godot AI: %s assertions, %s failures" % [assertions, failures])
@@ -2000,6 +2018,52 @@ func _network_tests(node: Node) -> void:
 	if bad_submit.get("ok", false):
 		var missing = await assets.refresh(str(bad_submit["result"]["id"]), bad_profile, {})
 		check(missing.get("code") == "missing_artifact", "Completed workflows with wrong output bindings fail explicitly")
+
+func _opencode_mcp_tests() -> void:
+	var mcp = scripts["opencode_mcp"].new()
+	var bridge = OpenCodeMCPPanelBridge.new()
+	mcp.panel = bridge
+	mcp.token = "a".repeat(64)
+	mcp.session_id = "fixture-session"
+	var unauthorized = await mcp._handle({"method": "POST", "path": "/mcp", "headers": {},
+		"body": JSON.stringify({"jsonrpc": "2.0", "id": 1, "method": "initialize"}).to_utf8_buffer()})
+	check(unauthorized.begins_with("HTTP/1.1 401") and not unauthorized.contains("serverInfo"), "MCP rejects missing bearer tokens")
+	var initialized = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+		"params": {"protocolVersion": "2025-11-25"}}, mcp.token))
+	check(initialized.begins_with("HTTP/1.1 200") and initialized.contains("\"protocolVersion\":\"2025-11-25\""), "MCP negotiates the V2 protocol revision")
+	var listed = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, mcp.token))
+	check(listed.contains("\"name\":\"search\"") and listed.contains("\"name\":\"describe\"") and listed.contains("\"name\":\"call\""), "MCP advertises the three meta-tools")
+	check(not listed.contains("godot_create_node"), "The full editor catalog stays out of MCP tools/list")
+	var searched = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+		"params": {"name": "search", "arguments": {"query": "node", "limit": 3}}}, mcp.token))
+	check(bridge.searches == [["node", 3]] and searched.contains("godot_create_node"), "MCP search delegates to the editor catalog")
+	var captured = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+		"params": {"name": "call", "arguments": {"name": "editor_capture", "arguments": {}}}}, mcp.token))
+	check(bridge.executions == [["editor_capture", {}]], "MCP call preserves tool names and arguments")
+	check(captured.count("\"type\":\"image\"") == 1 and captured.count("aGVsbG8=") == 1, "Captures return one MCP image block, not duplicated base64 text")
+	var chunked_body = JSON.stringify({"jsonrpc": "2.0", "id": 5, "method": "ping"})
+	var parsed = mcp._parse_http(_mcp_chunked(chunked_body))
+	check(parsed.get("method") == "POST" and parsed.get("body", PackedByteArray()).get_string_from_utf8() == chunked_body, "Chunked JSON-RPC request bodies are decoded")
+	var partial = PackedByteArray("POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 50\r\n\r\n{}".to_utf8_buffer())
+	check(mcp._parse_http(partial).is_empty(), "Incomplete HTTP bodies wait for more bytes")
+	var panel = scripts["panel"].new()
+	check(not panel._opencode_exposed("godot_call") and not panel._opencode_exposed("agent_spawn") and not panel._opencode_exposed("linux_execute"), "OpenCode cannot reach reflection, harness or shell tools")
+	check(panel._opencode_exposed("editor_capture") and panel._opencode_exposed("godot_create_node") and panel._opencode_exposed("godot_changes_apply"), "OpenCode reaches editor, playtest and change-set tools")
+	panel.free()
+
+func _mcp_request(message: Dictionary, token: String) -> Dictionary:
+	return {"method": "POST", "path": "/mcp", "headers": {"authorization": "Bearer " + token,
+		"content-type": "application/json"}, "body": JSON.stringify(message).to_utf8_buffer()}
+
+func _mcp_chunked(body: String) -> PackedByteArray:
+	var output := PackedByteArray()
+	for offset in range(0, body.length(), 7):
+		var part := body.substr(offset, 7)
+		output.append_array(("%x\r\n" % part.length()).to_utf8_buffer())
+		output.append_array(part.to_utf8_buffer())
+		output.append_array("\r\n".to_utf8_buffer())
+	output.append_array("0\r\n\r\n".to_utf8_buffer())
+	return "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nTransfer-Encoding: chunked\r\n\r\n".to_utf8_buffer() + output
 
 func _new_feature_tests() -> void:
 	var common = scripts["common"]

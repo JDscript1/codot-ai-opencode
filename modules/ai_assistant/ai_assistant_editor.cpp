@@ -631,6 +631,17 @@ Dictionary AIAssistantProjectManager::linux_runtime_request(const String &p_acti
 	return ai_linux_runtime_request(p_action, p_args);
 }
 
+Dictionary AIAssistantEditorPlugin::opencode_mcp_info() {
+	if (!panel) {
+		Dictionary failure;
+		failure["ok"] = false;
+		failure["error"] = "Panoul AI Assistant nu este disponibil.";
+		return failure;
+	}
+	Variant result = panel->call("opencode_mcp_info");
+	return result.get_type() == Variant::DICTIONARY ? Dictionary(result) : Dictionary();
+}
+
 void AIAssistantEditorPlugin::make_visible(bool p_visible) {
 	if (chat_dock) {
 		if (p_visible) {
@@ -799,7 +810,114 @@ AIZivaEditorPlugin::~AIZivaEditorPlugin() {
 	}
 }
 
+void AIOpenCodePanel::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("opencode_request", "action", "arguments"), &AIOpenCodePanel::opencode_request);
+	ClassDB::bind_method(D_METHOD("mcp_info"), &AIOpenCodePanel::mcp_info);
+}
+
+Dictionary AIOpenCodePanel::opencode_request(const String &p_action, const Dictionary &p_args) {
+	ERR_FAIL_COND_V(!(p_action == "status" || p_action == "install" || p_action == "cancel" || p_action == "start" ||
+			p_action == "stop" || p_action == "embed"),
+			Dictionary());
+	Dictionary args = p_args.duplicate(true);
+	if (!args.has("project_directory")) {
+		args["project_directory"] = ProjectSettings::get_singleton()->globalize_path("res://");
+	}
+	return ai_linux_runtime_request("opencode_" + p_action, args);
+}
+
+Dictionary AIOpenCodePanel::mcp_info() {
+	Dictionary failure;
+	if (!AIAssistantEditorPlugin::singleton) {
+		failure["ok"] = false;
+		failure["code"] = "mcp_unavailable";
+		failure["error"] = "Panoul AI Assistant nu este disponibil.";
+		return failure;
+	}
+	return AIAssistantEditorPlugin::singleton->opencode_mcp_info();
+}
+
+void AIOpenCodePanel::configure_project(const String &p_project) {
+	if (model.is_valid()) {
+		model->set("project_directory", p_project);
+	}
+}
+
+AIOpenCodePanel::AIOpenCodePanel() {
+	set_name("OpenCodeMainScreen");
+	set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	for (const AIScriptSource &source : ai_script_sources) {
+		String name = source.name;
+		if (name != "opencode" && name != "opencode_screen") {
+			continue;
+		}
+		Ref<GDScript> script;
+		script.instantiate();
+		script->set_path("local://godot_opencode/" + name + ".gd");
+		script->set_source_code(String::utf8((const char *)source.data));
+		ERR_FAIL_COND(script->reload() != OK);
+		if (name == "opencode") {
+			model_script = script;
+		} else {
+			screen_script = script;
+		}
+	}
+	ERR_FAIL_COND(model_script.is_null() || screen_script.is_null());
+	model.instantiate();
+	model->set_script(model_script);
+	model->set("bridge", this);
+	set_script(screen_script);
+	call("configure", this, model);
+}
+
+AIOpenCodeEditorPlugin::AIOpenCodeEditorPlugin() {
+	AIOpenCodePanel *opencode = memnew(AIOpenCodePanel);
+	opencode->configure_project(ProjectSettings::get_singleton()->globalize_path("res://").trim_suffix("/"));
+	screen = opencode;
+	screen->hide();
+	EditorNode::get_singleton()->get_editor_main_screen()->get_control()->add_child(screen);
+}
+
+void AIOpenCodeEditorPlugin::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("_expand_workspace"), &AIOpenCodeEditorPlugin::_expand_workspace);
+}
+
+void AIOpenCodeEditorPlugin::_expand_workspace() {
+	if (workspace_active && screen && screen->is_visible_in_tree()) {
+		EditorNode::get_singleton()->set_distraction_free_mode(true);
+	}
+}
+
+void AIOpenCodeEditorPlugin::make_visible(bool p_visible) {
+	if (!screen) {
+		return;
+	}
+	if (p_visible && !workspace_active) {
+		previous_workspace_expanded = EditorNode::get_singleton()->is_distraction_free_mode_enabled();
+		workspace_active = true;
+		call_deferred(SNAME("_expand_workspace"));
+	} else if (!p_visible && workspace_active) {
+		workspace_active = false;
+		EditorNode::get_singleton()->set_distraction_free_mode(previous_workspace_expanded);
+	}
+	screen->set_visible(p_visible);
+}
+
+AIOpenCodeEditorPlugin::~AIOpenCodeEditorPlugin() {
+	if (screen) {
+		make_visible(false);
+		if (screen->get_parent()) {
+			screen->get_parent()->remove_child(screen);
+		}
+		memdelete(screen);
+	}
+}
+
+AIAssistantEditorPlugin *AIAssistantEditorPlugin::singleton = nullptr;
+
 AIAssistantEditorPlugin::AIAssistantEditorPlugin() {
+	singleton = this;
 	diagnostic_handler.errfunc = _capture_diagnostic;
 	diagnostic_handler.userdata = this;
 	add_error_handler(&diagnostic_handler);
@@ -836,6 +954,9 @@ AIAssistantEditorPlugin::AIAssistantEditorPlugin() {
 }
 
 AIAssistantEditorPlugin::~AIAssistantEditorPlugin() {
+	if (singleton == this) {
+		singleton = nullptr;
+	}
 	experiment_runner.stop();
 	remove_error_handler(&diagnostic_handler);
 	if (runtime_debugger.is_valid()) {

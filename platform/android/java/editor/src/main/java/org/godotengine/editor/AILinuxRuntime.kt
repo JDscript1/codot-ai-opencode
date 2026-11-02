@@ -47,6 +47,7 @@ object AILinuxRuntime {
         return try {
             val arguments = JSONObject(text)
             if (action.startsWith("ziva_")) return AIZivaRuntime.command(current, action, arguments).toString()
+            if (action.startsWith("opencode_")) return AIOpenCodeRuntime.command(current, action, arguments).toString()
             when (action) {
                 "status" -> {
                     val result = core(current).state().put("ok", true).put("supported", true)

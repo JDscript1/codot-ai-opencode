@@ -149,6 +149,13 @@ jobs:
               assert probe[:4] == b'\x7fELF' and probe[4] == 2, 'Missing 64-bit embedded runtime probe'
               assert int.from_bytes(probe[16:18], 'little') == 3, 'Probe must be PIE/ET_DYN'
               assert int.from_bytes(probe[18:20], 'little') == 183, 'Probe must target AArch64'
+              pty = archive.read('lib/arm64-v8a/libai_pty.so')
+              assert pty[:4] == b'\x7fELF' and pty[4] == 2, 'Missing 64-bit OpenCode PTY helper'
+              assert int.from_bytes(pty[16:18], 'little') == 3, 'PTY helper must be PIE/ET_DYN'
+              assert int.from_bytes(pty[18:20], 'little') == 183, 'PTY helper must target AArch64'
+              for asset in ['assets/ai/opencode/terminal.html', 'assets/ai/opencode/xterm.js',
+                            'assets/ai/opencode/addon-fit.js', 'assets/ai/opencode/xterm.css', 'assets/ai/opencode/LICENSE']:
+                  assert asset in archive.namelist(), 'Missing OpenCode terminal asset: ' + asset
               import json
               manifest = json.loads(archive.read('assets/godot_ai/embedded/manifest.json'))
               for path, spec in manifest['files'].items():
@@ -163,10 +170,11 @@ jobs:
               lock = json.loads(Path('tools/embedded-runtime/rootfs.json').read_text())
               assert package['source_sha256'] == lock['sha256'], 'Unexpected Debian base'
               dex = b''.join(archive.read(name) for name in archive.namelist() if name.endswith('.dex'))
-              for component in ['AILinuxRuntime', 'AILinuxRuntimeService', 'AILinuxRuntimeFiles', 'AIZivaRuntime', 'AIZivaService', 'AIZivaWindow', 'AIZivaPackage', 'AIZivaGodot', 'AIZivaDependencies', 'AIZivaSession', 'AIZivaUpdates']:
+              for component in ['AILinuxRuntime', 'AILinuxRuntimeService', 'AILinuxRuntimeFiles', 'AIZivaRuntime', 'AIZivaService', 'AIZivaWindow', 'AIZivaPackage', 'AIZivaGodot', 'AIZivaDependencies', 'AIZivaSession', 'AIZivaUpdates', 'AIOpenCodeRuntime', 'AIOpenCodeWindow']:
                   assert ('Lorg/godotengine/editor/' + component + ';').encode() in dex, component
               library = archive.read('lib/arm64-v8a/libgodot_android.so')
               assert b'AIAssistantEditorPlugin' in library, 'AI editor module missing'
+              assert b'AIOpenCodeEditorPlugin' in library, 'OpenCode editor plugin missing'
               for source in Path('modules/ai_assistant/runtime').glob('*.gd'):
                   assert source.read_bytes() + b'\x00' in library, 'Embedded script differs: ' + source.name
           if os.environ.get('GODOT_AI_DEBUG_KEYSTORE_FILE'):

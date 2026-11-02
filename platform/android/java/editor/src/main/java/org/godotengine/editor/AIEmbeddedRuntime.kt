@@ -28,6 +28,7 @@ object AIEmbeddedRuntime {
         activity = WeakReference(value)
         AILinuxRuntime.initialize(value)
         AIZivaRuntime.register(value)
+        AIOpenCodeRuntime.initialize(value)
         // Runs once for this editor launch, after Activity.onCreate has returned.
         if (Build.VERSION.SDK_INT >= 29 && Application.getProcessName() == value.packageName) {
             Handler(Looper.getMainLooper()).post { command("embedded_probe") }

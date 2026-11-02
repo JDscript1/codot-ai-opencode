@@ -34,6 +34,7 @@ static var MediaView: GDScript
 static var ModelPreview: GDScript
 static var EditorControl: GDScript
 static var Store: GDScript
+static var OpenCodeMCP: GDScript
 var store: RefCounted
 var editor_control: RefCounted
 var model_rendering = false
@@ -73,6 +74,9 @@ var question_waiting = ""
 var question_draft_revision = 0
 var account_profiles: Array = []
 var active_definitions: Array = []
+var opencode_mcp: RefCounted
+var opencode_busy := false
+var opencode_turn := 0
 var transcript: RichTextLabel
 var composer: TextEdit
 var status_label: Label
@@ -299,8 +303,17 @@ func _ready() -> void:
 	add_child(price_timer)
 	price_timer.start()
 	_refresh_all_prices.call_deferred()
+	if not project_manager_mode:
+		opencode_mcp = OpenCodeMCP.new()
+		opencode_mcp.configure(self, data_directory.path_join("opencode_mcp.json"))
+		var mcp_started: Dictionary = opencode_mcp.start()
+		if not mcp_started.get("ok", false):
+			push_warning("Serverul MCP OpenCode nu a pornit: " + str(mcp_started.get("error", "")))
 
 func _exit_tree() -> void:
+	if opencode_mcp != null:
+		opencode_mcp.stop()
+		opencode_mcp = null
 	if engineering != null: engineering.shutdown()
 	if tools != null: tools.finish_playtest(current_turn)
 	_restore_workspace_bottom_panel()
@@ -2475,7 +2488,7 @@ func _requests_preview(text: String) -> bool:
 	return false
 
 func _start_chat(text: String, selection: Dictionary = {}) -> void:
-	if busy or text.strip_edges().is_empty(): return
+	if busy or opencode_busy or text.strip_edges().is_empty(): return
 	var profile = _profile_by_id(str(selection.get("profile", _current_profile().get("id", "")))).duplicate(true)
 	if profile.is_empty() or model_picker.selected < 0:
 		_status("Configurează un profil și selectează un model.")
@@ -2541,7 +2554,7 @@ func _start_chat(text: String, selection: Dictionary = {}) -> void:
 	if not project_manager_mode:
 		integrations.linux.refresh()
 		if _mode() in [1, 2, 4] and not integrations.linux.state.get("packaged", false) and integrations.termux != null and integration_settings.get("blender_enabled", false): await integrations.termux.ensure_ready(cancel)
-	active_definitions = _start_definitions() if project_manager_mode else (integrations.linux.definitions(bool(integration_settings.get("linux_enabled", false)) and integrations.linux.available()) + tools.definitions() + assets.definitions() + FileRegistry.definitions() + [_preview_definition()] + EditorControl.definitions() + Store.definitions() + _agent_definitions() + agent_jobs.play_definitions() + Workspace.definitions() + integrations.definitions(bool(integration_settings.get("github_enabled", false)) and github_has_token and Integrations.valid_repository(str(integration_settings.get("github_repository", ""))), bool(integration_settings.get("blender_enabled", false)), integrations.termux != null and integrations.termux.available()))
+	active_definitions = _all_definitions()
 	mcp.tool_index.clear()
 	for server in ([] if project_manager_mode else config["mcp"]):
 		if cancel.get("cancelled", false): break
@@ -2790,34 +2803,123 @@ func _work_jobs_changed(parent: String) -> void:
 	if chat == null or parent != current_turn: return
 	chat.show_work_jobs(agent_jobs.jobs.values().filter(func(job: Dictionary) -> bool: return job.get("parent") == parent).map(func(job: Dictionary) -> Dictionary: return {"id": job["id"], "task": _redact(str(job["task"])), "kind": job["kind"], "status": job["status"], "steps": job.get("steps", 0)}))
 
+func _all_definitions() -> Array:
+	if project_manager_mode:
+		return _start_definitions()
+	return integrations.linux.definitions(bool(integration_settings.get("linux_enabled", false)) and integrations.linux.available()) + tools.definitions() + assets.definitions() + FileRegistry.definitions() + [_preview_definition()] + EditorControl.definitions() + Store.definitions() + _agent_definitions() + agent_jobs.play_definitions() + Workspace.definitions() + integrations.definitions(bool(integration_settings.get("github_enabled", false)) and github_has_token and Integrations.valid_repository(str(integration_settings.get("github_repository", ""))), bool(integration_settings.get("blender_enabled", false)), integrations.termux != null and integrations.termux.available())
+
+# OpenCode is a separate agent with its own TUI approvals. Chat/harness
+# plumbing stays in the assistant; editor, playtest, capture, change-set,
+# asset, store, skill and engineering tools are exposed through MCP.
+const OPENCODE_BLOCKED_PREFIXES := ["agent_", "task_", "plan_", "memory_", "ziva_", "mcp_", "linux_", "github_", "blender_", "preview_", "tool_"]
+const OPENCODE_BLOCKED_TOOLS := ["godot_call", "godot_describe", "project_dialog", "file_catalog", "file_show", "file_observe", "file_preview"]
+
+func _opencode_exposed(name: String) -> bool:
+	if name.is_empty() or name in OPENCODE_BLOCKED_TOOLS:
+		return false
+	for prefix in OPENCODE_BLOCKED_PREFIXES:
+		if name.begins_with(prefix):
+			return false
+	return true
+
+func opencode_mcp_info() -> Dictionary:
+	if opencode_mcp == null:
+		return {"ok": false, "code": "mcp_unavailable", "error": "Serverul MCP nu este pornit."}
+	return opencode_mcp.info()
+
+func opencode_catalog() -> Array:
+	var catalog := []
+	for definition in _all_definitions():
+		var name := str(definition.get("name", ""))
+		if not _opencode_exposed(name):
+			continue
+		catalog.append({"name": name, "description": str(definition.get("description", "")), "risk": str(definition.get("risk", "external")), "parameters": definition.get("parameters", {})})
+	catalog.sort_custom(func(first: Dictionary, second: Dictionary) -> bool: return str(first["name"]) < str(second["name"]))
+	return catalog
+
+func opencode_search(query: String, limit: int = 20) -> Dictionary:
+	var terms := query.strip_edges().to_lower().split(" ", false)
+	var catalog := opencode_catalog()
+	var results := []
+	for tool in catalog:
+		var haystack := (str(tool["name"]) + " " + str(tool["description"])).to_lower()
+		var matches := terms.is_empty()
+		if not matches:
+			matches = true
+			for term in terms:
+				if not term in haystack:
+					matches = false
+					break
+		if matches:
+			results.append({"name": tool["name"], "description": str(tool["description"]).left(280), "risk": tool["risk"]})
+		if results.size() >= clampi(limit, 1, 50):
+			break
+	return {"ok": true, "result": results, "matched": results.size(), "catalog": catalog.size()}
+
+func opencode_describe(name: String) -> Dictionary:
+	for tool in opencode_catalog():
+		if str(tool["name"]) != name:
+			continue
+		return {"ok": true, "result": {"name": tool["name"], "description": tool["description"], "inputSchema": tool["parameters"], "risk": tool["risk"]}}
+	return Common.failure("Instrument necunoscut: " + name, "tool_unavailable")
+
+func opencode_execute(name: String, args: Dictionary) -> Dictionary:
+	if not _opencode_exposed(name):
+		return Common.failure("Instrumentul nu este expus sesiunii OpenCode.", "tool_unavailable")
+	if busy or opencode_busy:
+		return Common.failure("Asistentul AI rulează deja o operație. Reîncearcă imediat.", "busy")
+	var saved_definitions := active_definitions
+	var saved_cancel := cancel
+	var saved_turn := current_turn
+	var saved_tools_turn := tools.turn_id if tools != null else ""
+	opencode_busy = true
+	opencode_turn += 1
+	current_turn = "opencode-%d" % opencode_turn
+	active_definitions = _all_definitions()
+	cancel = {"cancelled": false}
+	if tools != null:
+		tools.turn_id = current_turn
+	var result: Dictionary = await _execute_call(name, args, true)
+	active_definitions = saved_definitions
+	cancel = saved_cancel
+	current_turn = saved_turn
+	if tools != null:
+		tools.turn_id = saved_tools_turn
+	opencode_busy = false
+	return result
+
 func _definition_visible(definition: Dictionary) -> bool:
 	if _mode() == 0 and str(definition.get("name", "")) in ["asset_status", "asset_wait", "task_update", "task_check", "plan_ask"]: return false
 	return definition.get("risk", "external") == "read" or _mode() in [1, 2, 4]
 
-func _execute_call(name: String, args: Dictionary) -> Dictionary:
+func _execute_call(name: String, args: Dictionary, external: bool = false) -> Dictionary:
 	# Approval can edit this operation's copy, never the model's original arguments.
 	args = args.duplicate(true)
 	var definition = {}
 	for candidate in active_definitions:
 		if candidate["name"] == name: definition = candidate
+	if definition.is_empty() and external:
+		for candidate in _all_definitions():
+			if candidate["name"] == name: definition = candidate
 	if definition.is_empty(): return Common.failure("Instrument indisponibil.")
-	if not _definition_visible(definition): return Common.failure("Instrument indisponibil în modul de lucru curent.", "tool_unavailable")
+	if not external and not _definition_visible(definition): return Common.failure("Instrument indisponibil în modul de lucru curent.", "tool_unavailable")
 	var validation = ToolRegistry.validate(definition, args)
 	if not validation.get("ok", false):
 		_record_event(name, args, validation)
 		return validation
-	if definition.get("risk", "external") != "read" and _mode() == 2 and planner.phase == "idle":
-		return Common.failure("Modul Auto cere un plan scurt înainte de modificări. Publică task_update cu phase=executing, apoi reia operația.", "plan_required")
-	if definition.get("risk", "external") != "read" and not planner.can_write():
-		return Common.failure("Planul este în pregătire sau doar propus. Actualizează task_update la executing înainte de modificări; modul Plan rămâne doar pentru citire.", "plan_read_only")
 	var review_decision = {}
-	if not await _authorize(definition, args, {}, review_decision):
-		var denied = Common.failure("Operația nu a fost autorizată.", "permission_denied")
-		_record_event(name, args, denied)
-		return denied
+	if not external:
+		if definition.get("risk", "external") != "read" and _mode() == 2 and planner.phase == "idle":
+			return Common.failure("Modul Auto cere un plan scurt înainte de modificări. Publică task_update cu phase=executing, apoi reia operația.", "plan_required")
+		if definition.get("risk", "external") != "read" and not planner.can_write():
+			return Common.failure("Planul este în pregătire sau doar propus. Actualizează task_update la executing înainte de modificări; modul Plan rămâne doar pentru citire.", "plan_read_only")
+		if not await _authorize(definition, args, {}, review_decision):
+			var denied = Common.failure("Operația nu a fost autorizată.", "permission_denied")
+			_record_event(name, args, denied)
+			return denied
 	if cancel.get("cancelled", false): return Common.failure("Oprit.", "cancelled")
-	if _has_steering(): return Common.failure("Cerința a fost actualizată înaintea execuției.", "steered")
-	_status(_tool_status(name))
+	if not external and _has_steering(): return Common.failure("Cerința a fost actualizată înaintea execuției.", "steered")
+	if not external: _status(_tool_status(name))
 	var result: Dictionary
 	if name == "project_dialog" and project_manager_mode:
 		plugin.call_deferred("project_action", str(args["action"]))
@@ -2902,7 +3004,7 @@ func _execute_call(name: String, args: Dictionary) -> Dictionary:
 	elif name == "asset_import": result = assets.import_job(str(args.get("job", "")), str(args.get("directory", "res://ai_assets")))
 	elif name.begins_with("godot_changes_"): result = await tools.execute_changes(name, args, cancel)
 	else: result = tools.execute(name, args, _permission_mode(), true)
-	if result.get("ok", false) and not result.get("images", []).is_empty() and not result.has("files") and name not in ["file_observe"]:
+	if result.get("ok", false) and not external and not result.get("images", []).is_empty() and not result.has("files") and name not in ["file_observe"]:
 		_register_result_images(result, name in ["editor_capture", "playtest_observe"])
 	if result.get("ok", false) and name in ["asset_status", "asset_wait", "asset_import"]:
 		var job = assets.find_job(str(args.get("job", "")))
@@ -2921,7 +3023,7 @@ func _execute_call(name: String, args: Dictionary) -> Dictionary:
 			if item.get("kind") == "mesh" and str(item.get("preview", "")).is_empty() and rendered < 2:
 				await _observe_model(item)
 				rendered += 1
-	if not _vision_enabled(): result.erase("images")
+	if not _vision_enabled() and not external: result.erase("images")
 	if not review_decision.is_empty(): result["approval"] = review_decision
 	# A failed coordinated write may have changed disk before compensation or a conflict.
 	var batch_mutation = name in ["godot_changes_apply", "godot_changes_rollback"] and result.get("project_mutated", false)
@@ -3653,6 +3755,8 @@ func _register_blender_outputs(result: Dictionary) -> void:
 	if not ids.is_empty(): result["files"] = ids
 
 func _process(_delta: float) -> void:
+	if opencode_mcp != null:
+		opencode_mcp.poll()
 	capture_prune_clock += _delta
 	if capture_prune_clock >= 60.0 and file_registry != null:
 		capture_prune_clock = 0.0

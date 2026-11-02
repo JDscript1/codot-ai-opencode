@@ -41,6 +41,9 @@ public:
 
 class AIAssistantEditorPlugin : public EditorPlugin {
 	GDCLASS(AIAssistantEditorPlugin, EditorPlugin);
+public:
+	static AIAssistantEditorPlugin *singleton;
+private:
 	Control *panel = nullptr;
 	EditorDock *chat_dock = nullptr;
 	int chat_placement = 0;
@@ -73,6 +76,7 @@ public:
 	void experiment_stop();
 	Dictionary speech_request(const String &p_action, const Dictionary &p_args);
 	Dictionary linux_runtime_request(const String &p_action, const Dictionary &p_args);
+	Dictionary opencode_mcp_info();
 	Dictionary termux_blender_request(const String &p_action, const Dictionary &p_args);
 	Dictionary script_diagnostics(const String &p_source, const String &p_path);
 	Dictionary diagnostics_snapshot();
@@ -124,6 +128,43 @@ public:
 	void make_visible(bool p_visible) override;
 	AIZivaEditorPlugin();
 	~AIZivaEditorPlugin();
+};
+
+// Separate main screen for the optional OpenCode terminal. It reuses only the
+// app-owned Linux runtime and the assistant's MCP tool catalog, never its chat.
+class AIOpenCodePanel : public VBoxContainer {
+	GDCLASS(AIOpenCodePanel, VBoxContainer);
+	Ref<GDScript> model_script;
+	Ref<GDScript> screen_script;
+	Ref<RefCounted> model;
+
+protected:
+	static void _bind_methods();
+
+public:
+	Dictionary opencode_request(const String &p_action, const Dictionary &p_args);
+	Dictionary mcp_info();
+	void configure_project(const String &p_project);
+	AIOpenCodePanel();
+};
+
+class AIOpenCodeEditorPlugin : public EditorPlugin {
+	GDCLASS(AIOpenCodeEditorPlugin, EditorPlugin);
+	Control *screen = nullptr;
+	bool workspace_active = false;
+	bool previous_workspace_expanded = false;
+	void _expand_workspace();
+
+protected:
+	static void _bind_methods();
+
+public:
+	bool has_main_screen() const override { return true; }
+	bool keeps_workspace_fixed() const override { return true; }
+	String get_plugin_name() const override { return "OpenCode"; }
+	void make_visible(bool p_visible) override;
+	AIOpenCodeEditorPlugin();
+	~AIOpenCodeEditorPlugin();
 };
 
 // A host for the shared chat that does not construct an EditorPlugin or EditorNode.

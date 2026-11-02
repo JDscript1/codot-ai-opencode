@@ -267,10 +267,18 @@ class AILinuxRuntimeFiles(
     fun startProcess(command: List<String>, project: File?, extraEnvironment: Map<String, String> = emptyMap(),
         binds: List<Pair<String, String>> = emptyList()): Process {
         stopCheck()
+        val arguments = prootArguments(command, project, binds)
+        return ProcessBuilder(arguments).redirectErrorStream(true).apply {
+            environment().clear()
+            environment().putAll(processEnvironment(extraEnvironment))
+        }.start()
+    }
+
+    /** PRoot invocation shared with the PTY host, which execs it on a terminal. */
+    fun prootArguments(command: List<String>, project: File?, binds: List<Pair<String, String>> = emptyList()): List<String> {
         check(root.isDirectory && !Files.isSymbolicLink(root.toPath())) { "Filesystem Linux invalid. Dezinstalează și reinstalează Linux." }
         val proot = File(nativeDirectory, "libai_proot.so"); val loader = File(nativeDirectory, "libai_proot_loader.so")
         check(proot.canExecute() && loader.canExecute()) { "Executabilele Linux nu sunt ambalate în aplicație." }
-        val scratch = File(base, "tmp").apply { mkdirs() }
         val args = mutableListOf(proot.absolutePath, "--kill-on-exit", "--link2symlink", "--sysvipc", "-L", "-0", "-r", root.absolutePath,
             "-b", "/dev", "-b", "/proc", "-b", "/sys")
         if (project != null) args.addAll(listOf("-b", project.absolutePath + ":/workspace"))
@@ -282,13 +290,18 @@ class AILinuxRuntimeFiles(
             args.addAll(listOf("-b", host.path + ":" + destination))
         }
         args.addAll(listOf("-w", if (project != null) "/workspace" else "/root")); args.addAll(command)
-        return ProcessBuilder(args).redirectErrorStream(true).apply {
-            environment().clear()
-            environment().putAll(mapOf("PATH" to "/usr/local/bin:/usr/bin:/bin", "HOME" to "/root", "USER" to "root", "LANG" to "C.UTF-8",
-                "TMPDIR" to "/tmp", "ANDROID_ROOT" to "/system", "ANDROID_DATA" to "/data", "PROOT_LOADER" to loader.absolutePath,
-                "PROOT_TMP_DIR" to scratch.absolutePath, "DEBIAN_FRONTEND" to "noninteractive"))
-            environment().putAll(extraEnvironment)
-        }.start()
+        return args
+    }
+
+    fun processEnvironment(extra: Map<String, String> = emptyMap()): Map<String, String> {
+        val loader = File(nativeDirectory, "libai_proot_loader.so")
+        val scratch = File(base, "tmp").apply { mkdirs() }
+        val environment = linkedMapOf(
+            "PATH" to "/root/.local/node_modules/.bin:/usr/local/bin:/usr/bin:/bin", "HOME" to "/root", "USER" to "root", "LANG" to "C.UTF-8",
+            "TMPDIR" to "/tmp", "ANDROID_ROOT" to "/system", "ANDROID_DATA" to "/data", "PROOT_LOADER" to loader.absolutePath,
+            "PROOT_TMP_DIR" to scratch.absolutePath, "DEBIAN_FRONTEND" to "noninteractive")
+        environment.putAll(extra)
+        return environment
     }
 
     fun launch(command: List<String>, project: File?, seconds: Int): JSONObject {

@@ -8,6 +8,80 @@ etapă importantă: implementare, verificare, compilare sau livrare. „Implemen
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
 
+## AG-84 — OpenCode TUI ca runtime de agent, cu unelte Godot prin MCP — 2.11.2026
+
+**Cerință.** Asistentul propriu trebuie păstrat ca fallback, dar aplicația are
+nevoie de un runtime de agent separat, OpenCode, afișat direct în editor:
+interfața terminal OpenCode într-un tab principal, capabilitățile native Godot
+expuse prin MCP și instalarea CLI-ului prin npm în runtime-ul Debian existent,
+fără Termux sau un runtime suplimentar pe dispozitiv.
+
+**Implementat în surse.**
+
+- Tab principal **OpenCode**, plugin de editor separat, cu bară de stare,
+  instalare anulabilă, pornire/oprire/repornire, placeholder cu erori și
+  încadrare nativă a terminalului peste suprafața Godot.
+- `AIOpenCodeRuntime.kt`: instalare `nodejs`, `npm`, `git` și `ripgrep` prin
+  `apt-get` când lipsesc, apoi `npm install --prefix /root/.local
+  @opencode/cli@2.2.5`; verificare binar și `--version`; stare, progres,
+  anulare, spațiu liber minim 900 MB; proiectul este montat de PRoot la
+  `/workspace`; configurarea OpenCode este actualizată fără a suprascrie
+  cheile utilizatorului.
+- Configurare OpenCode V2: `mcp.servers.godot` de tip `remote`, fără OAuth,
+  fără codemode, cu token bearer; permisiuni ordonate: `read`,
+  `godot_search` și `godot_describe` permise, `edit`, `shell` și `godot_call`
+  cer aprobare. Sunt acceptate `opencode.json` și `opencode.jsonc`, inclusiv
+  comentarii și virgule finale; un fișier ilegibil oprește pornirea în loc să
+  fie înlocuit.
+- `libai_pty.so` (`ai_pty.c`): PTY nativ pentru Android, copiere
+  stdin/stdout, redimensionare prin FIFO (`R cols rows`), terminare
+  grațioasă (`Q`), propagarea semnalelor și cod de ieșire. Este compilat PIE
+  ARM64 cu aliniere pe pagini de 16 KB și împachetat în `nativeLibraryDir`.
+- `AIOpenCodeWindow.kt` și activele xterm.js 6.0.0 / `@xterm/addon-fit`
+  0.11.0: WebView local, punte JS restrânsă pentru intrare, paste,
+  redimensionare și tastatură; ieșire base64 în loturi, limită de 2 MB în
+  coadă și resincronizare din scrollback-ul de 512 KB al runtime-ului.
+- `opencode_mcp.gd`: server MCP loopback cu token bearer, JSON-RPC
+  `initialize`/`ping`/`tools/list`/`tools/call`, negociere până la
+  `2025-11-25`, corpuri chunked, limite de antet/corp/conexiuni și expunerea
+  a doar trei meta-unelte: `search`, `describe`, `call`.
+- `panel.gd`: catalogul OpenCode pornește de la toate definițiile editorului,
+  dar elimină harness-ul, planificarea, memoria, Ziva, MCP, Linux, GitHub,
+  Blender, preview-ul, managementul de unelte și reflecția brută; rămân
+  scenele, nodurile, scripturile, playtest-ul, capturile, change sets,
+  assets, skills, store, engineering și verificarea. Execuția trece prin
+  `_execute_call(..., true)`, cu jurnal, aprobări și un singur apel concurent.
+- Legături C++ (`AIOpenCodePanel`, `AIOpenCodeEditorPlugin`, singleton-ul
+  asistentului), înregistrare în `editor_node.cpp`, ciclu de viață Android
+  (`initialize`, `release`, `pause`, `resume`) și ordinea de build a
+  scripturilor încorporate.
+- Build și CI: compilarea `ai_pty.c` în `buildAiEmbeddedRuntime`; workflow-ul
+  verifică în APK `libai_pty.so` ca ELF 64-bit PIE AArch64, cele cinci active
+  ale terminalului, clasele Kotlin în dex și pluginul nativ.
+
+**Verificat local.** `gdparse` a trecut pe `opencode_mcp.gd`, `opencode.gd`,
+`opencode_screen.gd` și `panel.gd`. `node --check` a trecut pe JavaScript-ul
+inline din `terminal.html` și pe `addon-fit.js`. `py_compile` a trecut pe
+`runtime_builder.py`; toate scripturile `runtime/*.gd` sunt incluse în build.
+Workflow-ul YAML se parsează. `ai_pty.c` compilează și se linkează cu clang
+`-O2 -Wall -Wextra -Werror`. `git diff --check` este curat. Testele Godot
+adaugă verificări pentru tokenul MCP, negocierea protocolului, cele trei
+meta-unelte, delegarea căutării/execuției, imaginile capturilor, corpurile
+chunked, corpurile incomplete și filtrarea catalogului.
+
+**Limite.** Sursa nu a fost compilată în APK: mediul local nu are Android
+SDK/NDK, Gradle, Kotlin sau un editor Godot precompilat. Nu au fost rulate pe
+dispozitiv instalarea npm în PRoot, pornirea PTY, redimensionarea, tastatura,
+scrollback-ul, aprobările TUI sau repornirea. Nu există probă live cu un
+furnizor OpenCode; `/connect` și `/models` rămân de validat pe un cont real.
+CLI-ul este fixat la `2.2.5`, iar o actualizare poate schimba numele
+acțiunilor sau formatul configurației V2. O singură sesiune OpenCode rulează
+odată, pe un singur proiect. Detalii: `docs/OPENCODE_RUNTIME.md`.
+
+Jurnal: 2.11.2026 — AG-84, tab OpenCode, runtime npm în PRoot, PTY nativ,
+terminal xterm și server MCP cu unelte Godot; surse verificate static, APK-ul
+și proba pe dispozitiv rămân de făcut.
+
 ## AG-83 — OmniRoute self-hosted cu cheie API, Termux sau hotspot — 2.11.2026
 
 **Cerință.** Utilizatorul rulează OmniRoute fie local în Termux, fie pe alt
