@@ -312,7 +312,9 @@ pe sursa `793a4152b3567e98506d3673dffbde13f41d542f`: joburile `runtime`,
 `com.jdscript.godotai.debug`, numai ARM64, **112.790.988 bytes**, SHA-256
 `78812b2dbdde1984b7779772aa61e46bfb137c20fac979830a0d643f4f7fc0fd`.
 Artefactul este păstrat ca dovadă locală în
-`~/godot-ai-artifacts/opencode-793a4152/`; nu a fost instalat sau livrat.
+`~/godot-ai-artifacts/opencode-793a4152/` și a fost livrat în
+`/storage/emulated/0/Download/Godot-AI-Android-arm64-debug.apk`, cu checksum
+alăturat. Pachetul nu a fost instalat.
 
 ## Limite și pași următori
 

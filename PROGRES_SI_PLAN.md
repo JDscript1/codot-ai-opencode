@@ -80,12 +80,18 @@ verificări, 0 eșecuri**. În APK au fost confirmate `libai_pty.so` ca ELF
 toate cele **47 de scripturi încorporate** byte cu byte. APK-ul are
 `com.jdscript.godotai.debug`, numai ARM64, **112.790.988 bytes**, SHA-256
 `78812b2dbdde1984b7779772aa61e46bfb137c20fac979830a0d643f4f7fc0fd`.
-Artefactul este păstrat în `~/godot-ai-artifacts/opencode-793a4152/`; nu a
-fost instalat sau livrat. Primele două rulări au expus erori reale de tipare
-GDScript (tratate ca erori), apoi erori Kotlin Android (`Process.pid()` lipsește,
-`Os.mkfifo` nu întoarce cod, fluxul PTY nu este `FileOutputStream`) și o
-legătură lipsă în fixture-ul QA; toate au fost corectate înainte de rularea
-verde.
+Artefactul este păstrat în `~/godot-ai-artifacts/opencode-793a4152/` și a
+fost livrat în Download la **2.11.2026, 14:27 CET**, cu checksum alăturat.
+Sursa a fost recopiată, SHA-256-ul fișierului copiat a fost reverificat, iar
+arhiva ZIP a trecut `unzip -t`. S-au înlocuit vechile
+`Godot-AI-Android-arm64-debug.apk` (10:11) și `Godot-AI-Ziva-arm64-debug.apk`
+(10:05); în Download a rămas un singur installer al fork-ului, cu numele stabil
+`Godot-AI-Android-arm64-debug.apk`. Alte descărcări nu au fost atinse, iar
+pachetul nu a fost instalat automat. Primele două rulări au expus erori reale
+de tipare GDScript (tratate ca erori), apoi erori Kotlin Android
+(`Process.pid()` lipsește, `Os.mkfifo` nu întoarce cod, fluxul PTY nu este
+`FileOutputStream`) și o legătură lipsă în fixture-ul QA; toate au fost
+corectate înainte de rularea verde.
 
 **Limite.** APK-ul nu a fost instalat pe un dispozitiv. Nu au fost rulate pe
 dispozitiv instalarea npm în PRoot, pornirea PTY, redimensionarea, tastatura,
@@ -97,8 +103,8 @@ odată, pe un singur proiect. Detalii: `docs/OPENCODE_RUNTIME.md`.
 
 Jurnal: 2.11.2026 — AG-84, tab OpenCode, runtime npm în PRoot, PTY nativ,
 terminal xterm și server MCP cu unelte Godot; APK ARM64 compilat și verificat
-în GitHub Actions, cu SHA-256 publicat. Instalarea și proba pe dispozitiv
-rămân de făcut.
+în GitHub Actions, apoi livrat în Download cu SHA-256 și un singur installer
+al fork-ului. Instalarea și proba pe dispozitiv rămân de făcut.
 
 ## AG-83 — OmniRoute self-hosted cu cheie API, Termux sau hotspot — 2.11.2026
 
