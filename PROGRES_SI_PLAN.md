@@ -8,6 +8,38 @@ etapă importantă: implementare, verificare, compilare sau livrare. „Implemen
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
 
+## AG-82 — reconectarea ChatGPT folosește identitatea deja înregistrată — 2.11.2026
+
+**Defect raportat pe dispozitiv.** După autentificarea în browser, pagina de
+consimțământ OpenAI rămânea în spinner, apoi afișa „Sesiunea ta s-a încheiat”
+sau „Invalid consent request”. Profilul ChatGPT exista deja, dar tokenul din
+vault nu era actualizat; callback-ul nu ajungea în aplicație.
+
+**Cauză.** Profilul avea `client_id` emis (`oaiapp_...`), însă fluxul de
+reconectare nu trimitea `id_token_hint` și nici `login_hint`. Documentația SIWC
+spune că o reconectare cu client emis și `id_token_hint` trebuie să sară peste
+selectorul de cont/consent și să redirecționeze direct. Fără hint, OpenAI
+redeschidea consentul, care expira sau eșua.
+
+**Corectat în surse.** `Accounts.authorization_parameters` refolosește
+`client_id`-ul emis din profil sau din vault, adaugă `id_token_hint` și
+`login_hint` pentru contul salvat și include `agent_name_hint` numai la
+înregistrarea dinamică inițială. Testele verifică ambele ramuri: reconectare
+fără `agent_name_hint` și înregistrare nouă cu `dynamic_agent_client`.
+
+**Verificat.** Parserul GDScript și testele OAuth au trecut local. În rularea
+[41412371462](https://github.com/JDscript1/godot-ai-android/actions/runs/41412371462),
+pasul runtime a trecut, iar jobul Android a produs APK-ul Ziva. APK-ul are
+112.597.490 bytes, SHA-256
+`d7c85175ec9a21f2b57c39be872943aac6410c432714ee1ff2ff17b006a7583d` și a fost
+instalat peste aplicația existentă la 09:27, păstrând datele.
+
+**Limite.** Reconectarea live după instalare nu a fost încă încheiată în
+momentul acestei note. Callback-ul loopback și expirarea sesiunii OpenAI trebuie
+confirmate pe dispozitiv.
+
+Jurnal: 2.11.2026 — AG-82, hint-uri de reconectare ChatGPT și APK Ziva instalat.
+
 ## AG-81 — terminale ChatGPT/SIWC: `response.done`, JSON și diagnostic — 2.11.2026
 
 **Defect raportat pe dispozitiv.** Modelele din abonamentul ChatGPT nu
