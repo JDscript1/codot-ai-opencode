@@ -16,6 +16,21 @@ func _init(node: Node = null, secret_store: RefCounted = null) -> void:
 	transport = Transport.new(node)
 	vault = secret_store
 
+static func authorization_parameters(profile: Dictionary, saved_tokens: Variant, callback_uri: String, state: String, nonce: String, verifier: String) -> Dictionary:
+	var client_id = str(profile.get("client_id", ""))
+	if client_id.is_empty() or client_id == "dynamic_agent_client":
+		if saved_tokens is Dictionary and not str(saved_tokens.get("client_id", "")).is_empty(): client_id = str(saved_tokens["client_id"])
+	if client_id.is_empty(): client_id = "dynamic_agent_client"
+	var parameters = {"client_id": client_id, "ext_agent_host_id": profile.get("host_id", "urn:uuid:" + Common.uid()), "response_type": "code", "redirect_uri": callback_uri, "scope": "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct", "resource": RESOURCE, "state": state, "nonce": nonce, "code_challenge": _base64url(verifier.sha256_buffer()), "code_challenge_method": "S256"}
+	if client_id == "dynamic_agent_client": parameters["agent_name_hint"] = "Godot AI"
+	if saved_tokens is Dictionary:
+		var id_token_hint = str(saved_tokens.get("id_token", ""))
+		if not id_token_hint.is_empty(): parameters["id_token_hint"] = id_token_hint
+	var label = str(profile.get("name", ""))
+	var email = label.get_slice(" · ", 1) if " · " in label else ""
+	if "@" in email: parameters["login_hint"] = email
+	return parameters
+
 func login_chatgpt(profile: Dictionary, cancel: Dictionary, on_status: Callable = Callable()) -> Dictionary:
 	if pending: return Common.failure("Există deja o autentificare în curs.")
 	pending = true
@@ -27,9 +42,9 @@ func login_chatgpt(profile: Dictionary, cancel: Dictionary, on_status: Callable 
 	var verifier = _base64url(Crypto.new().generate_random_bytes(48))
 	var state = _base64url(Crypto.new().generate_random_bytes(32))
 	var nonce = _base64url(Crypto.new().generate_random_bytes(32))
-	var client_id = str(profile.get("client_id", "dynamic_agent_client"))
-	var parameters = {"client_id": client_id, "ext_agent_host_id": profile.get("host_id", "urn:uuid:" + Common.uid()), "response_type": "code", "redirect_uri": callback_uri, "scope": "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct", "resource": RESOURCE, "state": state, "nonce": nonce, "code_challenge": _base64url(verifier.sha256_buffer()), "code_challenge_method": "S256"}
-	if client_id == "dynamic_agent_client": parameters["agent_name_hint"] = "Godot AI"
+	var saved_tokens: Variant = Common.parse_json(vault.read(str(profile["id"])))
+	var parameters = authorization_parameters(profile, saved_tokens, callback_uri, state, nonce, verifier)
+	var client_id = str(parameters["client_id"])
 	if on_status.is_valid(): on_status.call("Continuă autentificarea în browser. Revino aici după autorizare.")
 	var opened = OS.shell_open(ISSUER + "/api/accounts/authorize?" + _form(parameters))
 	if opened != OK:
