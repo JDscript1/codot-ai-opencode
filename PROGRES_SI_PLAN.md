@@ -8,6 +8,73 @@ etapă importantă: implementare, verificare, compilare sau livrare. „Implemen
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
 
+## AG-83 — OmniRoute self-hosted cu cheie API, Termux sau hotspot — 2.11.2026
+
+**Cerință.** Utilizatorul rulează OmniRoute fie local în Termux, fie pe alt
+dispozitiv din hotspot/LAN și are nevoie de un furnizor dedicat care să accepte
+cheia API și să folosească adresa corectă în ambele situații.
+
+**Implementat în surse.** Catalogul are acum `OmniRoute`, grupat la
+`Local / self-hosted`, cu endpointul OpenAI-compatible implicit
+`http://127.0.0.1:20128/v1`. O adresă simplă precum `192.168.1.50` sau
+`192.168.1.50:20128` este normalizată automat la portul 20128 și `/v1`; URL-ul
+complet și calea `/models` sunt acceptate. Câmpul de adresă rămâne vizibil
+pentru profilurile salvate, iar HTTP este activat numai prin opțiunea locală
+explicită. Cheia introdusă este păstrată în vault și trimisă ca
+`Authorization: Bearer` atât la descoperirea modelelor, cât și la
+`/chat/completions`. Eticheta `OMNIROUTE_API_KEY=...` selectează furnizorul;
+o instalare OmniRoute fără autentificare poate păstra câmpul gol. Cheia nu este
+inclusă în URL sau în jurnal. A fost adăugat un simbol `route` din Lucide,
+înregistrat cu URL fix și SHA-256 în manifest, iar documentația descrie
+loopback-ul Termux, adresa hotspot/LAN și cheia din dashboard. Scanarea LAN
+rămâne limitată la Ollama/LM Studio/llama.cpp; OmniRoute configurat cu
+autentificare se introduce manual, deoarece scanarea nu trimite chei.
+
+**Verificat local.** Parserul GDScript a trecut pe fișierele modificate, iar
+sintaxa Python a trecut pentru fixture și generatorul de icoane.
+`test_delivery.py` a raportat 8/8, `test_termux_blender.py` 28/28,
+`tools/embedded-runtime/test_build.py` 2/2 și `test_rootfs.py` 4/4. Fixture-ul
+determinist acoperă 401 fără cheie, catalogul cu Bearer, excluderea modelelor de
+embedding, contextul/capabilitățile, normalizarea adreselor Termux/hotspot și
+finalizarea prin ruta chat. Prima rulare CI
+[41416158417](https://github.com/JDscript1/godot-ai-android/actions/runs/41416158417)
+a oprit runtime-ul pe o aserțiune de test care omitea opt-in-ul HTTP pentru
+endpointul LAN; testul a fost corectat, fără modificarea codului de produs.
+
+**Verificat în GitHub Actions.** Rularea Ziva
+[41416394355](https://github.com/JDscript1/godot-ai-android/actions/runs/41416394355)
+și rularea standard
+[41417163039](https://github.com/JDscript1/godot-ai-android/actions/runs/41417163039)
+au trecut toate joburile. Runtime-ul a raportat **988/0** aserțiuni, randarea
+**958/0** în fiecare dintre cele cinci configurații, editorul nativ **989/0** în
+fiecare configurație, scenariile dedicate 84/0–129/0, companionul **9/9**, iar
+jobul Android a verificat semnătura persistentă, package-ul, ABI ARM64,
+bibliotecile native și scripturile încorporate.
+
+**Livrare Android.** APK-ul Ziva este în
+`/storage/emulated/0/Download/Godot-AI-Ziva-arm64-debug.apk`: 112.596.562 bytes,
+package `com.jdscript.godotai.ziva.debug`, SHA-256
+`8a71e71c14f5f432df98bdd1880c3d028a36801078c5dd9b062920ca8df3d010`.
+A fost instalat peste aplicația existentă la 10:05, iar `config.json` din datele
+aplicației a rămas prezent. APK-ul standard este în
+`/storage/emulated/0/Download/Godot-AI-Android-arm64-debug.apk`: 112.595.302
+bytes, package `com.jdscript.godotai.debug`, SHA-256
+`c85821ab74211df1e40a0db779c4875fc20948ed567cf1dc44fc028c8e36e58e`.
+Ambele nume stabile și fișierele `.sha256` au înlocuit versiunile anterioare;
+APK-ul standard nu a fost instalat în această etapă. Artefactele descărcate sunt
+păstrate în `.ai-qa/omniroute-ziva/` și `.ai-qa/omniroute-standard/`.
+
+**Limite.** Nu există încă o probă live: la verificare nu asculta niciun server
+OmniRoute pe `127.0.0.1:20128`, iar cheia utilizatorului nu a fost disponibilă.
+Testele folosesc fixture-ul HTTP determinist, deci confirmă contractul
+adaptorului, nu modelele sau furnizorii upstream conectați în OmniRoute.
+Utilizatorul trebuie să testeze separat `http://127.0.0.1:20128/v1` în Termux
+sau `http://<IP-hotspot>:20128/v1` de pe celălalt dispozitiv. HTTP fără TLS
+trebuie folosit numai în rețeaua de încredere; expunerea publică cere HTTPS.
+
+Jurnal: 2.11.2026 — AG-83, OmniRoute adăugat cu cheie API, adrese Termux/LAN,
+fixture-uri deterministe, ambele APK-uri recompilate și Ziva instalat.
+
 ## AG-82 — reconectarea ChatGPT folosește identitatea deja înregistrată — 2.11.2026
 
 **Defect raportat pe dispozitiv.** După autentificarea în browser, pagina de
