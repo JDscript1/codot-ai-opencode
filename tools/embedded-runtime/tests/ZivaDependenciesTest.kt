@@ -59,11 +59,18 @@ fun main() {
         File(core.root, "etc/hosts").writeText("127.0.0.1 localhost\n10.1.2.3 keep.local\n")
         core.synchronizePackageHosts(listOf("151.101.2.132"))
         core.synchronizePackageHosts(listOf("151.101.66.132"))
-        val hosts = File(core.root, "etc/hosts").readText()
+        var hosts = File(core.root, "etc/hosts").readText()
         check("keep.local" in hosts && "151.101.66.132 deb.debian.org" in hosts && "151.101.2.132" !in hosts); checks++
         val hostStamp = File(core.root, "etc/hosts").lastModified()
         core.synchronizePackageHosts(listOf("151.101.66.132"))
         check(File(core.root, "etc/hosts").lastModified() == hostStamp); checks++
+        core.synchronizeHosts(mapOf(
+            "deb.debian.org" to listOf("151.101.66.132"),
+            "registry.npmjs.org" to listOf("104.16.8.34")
+        ))
+        hosts = File(core.root, "etc/hosts").readText()
+        check("registry.npmjs.org" in hosts && "104.16.8.34 registry.npmjs.org" in hosts); checks++
+        check(hosts.lineSequence().count { it == "# Godot managed package repository" } == 1); checks++
         println("Ziva dependencies and network: $checks checks, 0 failures")
     } finally { AILinuxRuntimeFiles.deleteTree(scratch) }
 }

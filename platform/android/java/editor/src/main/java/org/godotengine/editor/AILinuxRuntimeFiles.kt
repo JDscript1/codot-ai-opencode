@@ -187,18 +187,28 @@ class AILinuxRuntimeFiles(
 
     /** Use Android-resolved repository addresses when raw guest DNS is restricted. */
     fun synchronizePackageHosts(addresses: List<String>) {
+        synchronizeHosts(mapOf("deb.debian.org" to addresses))
+    }
+
+    /** Pin every repository host so npm and apt do not depend on the guest resolver. */
+    fun synchronizeHosts(hosts: Map<String, List<String>>) {
         check(root.isDirectory && !Files.isSymbolicLink(root.toPath())) { "Linux indisponibil." }
         val etc = File(root, "etc")
         check(etc.isDirectory && !Files.isSymbolicLink(etc.toPath()))
-        val safe = addresses.filter { it.matches(Regex("[a-fA-F0-9:.]+")) }.distinct().take(8)
-        check(safe.isNotEmpty()) { "Adresa serverului Debian nu poate fi rezolvată." }
+        val safeHosts = hosts.mapNotNull { (host, addresses) ->
+            if (!host.matches(Regex("[a-zA-Z0-9.-]{1,253}"))) return@mapNotNull null
+            val safe = addresses.filter { it.matches(Regex("[a-fA-F0-9:.]+")) }.distinct().take(4)
+            if (safe.isEmpty()) null else host to safe
+        }
+        check(safeHosts.isNotEmpty()) { "Adresele serverelor de pachete nu pot fi rezolvate." }
         val target = File(etc, "hosts")
         val original = if (target.isFile && !Files.isSymbolicLink(target.toPath())) target.readText() else "127.0.0.1 localhost\n::1 localhost\n"
         val start = "# Godot managed package repository"
         val end = "# End Godot managed package repository"
         val old = Regex("(?ms)^" + Regex.escape(start) + "\\n.*?^" + Regex.escape(end) + "(?:\\n|$)")
+        val entries = safeHosts.flatMap { (host, addresses) -> addresses.map { "$it $host" } }
         val text = original.replace(old, "").trimEnd() + "\n" + start + "\n" +
-            safe.joinToString("\n") { "$it deb.debian.org" } + "\n" + end + "\n"
+            entries.joinToString("\n") + "\n" + end + "\n"
         if (text == original) return
         val temporary = File(etc, "hosts.godot-${UUID.randomUUID()}.tmp")
         try {

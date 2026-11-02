@@ -160,12 +160,13 @@ func _refresh() -> void:
 	var installed := bool(state.get("installed", false))
 	var working: bool = backend.busy()
 	var linux_ready := bool(state.get("linux_ready", false))
+	var state_status := str(state.get("status", ""))
 	status.text = backend.caption()
 	status.tooltip_text = str(state.get("message", ""))
 	primary.visible = not running
-	primary.text = "Pornește OpenCode" if installed else "Instalează OpenCode"
+	primary.text = "Pornește OpenCode" if installed else ("Reîncearcă instalarea" if state_status == "error" else "Instalează OpenCode")
 	primary.disabled = working or not linux_ready
-	progress.visible = str(state.get("status", "")) == "installing"
+	progress.visible = state_status == "installing"
 	progress.value = int(state.get("progress", 0))
 	placeholder.visible = not running or not error_text.is_empty()
 	var menu := actions.get_popup()
@@ -173,16 +174,16 @@ func _refresh() -> void:
 	menu.set_item_disabled(menu.get_item_index(MENU_STOP), not running)
 	menu.set_item_disabled(menu.get_item_index(MENU_RESTART), not running)
 	menu.set_item_disabled(menu.get_item_index(MENU_INSTALL), running or working)
-	menu.set_item_disabled(menu.get_item_index(MENU_CANCEL), str(state.get("status", "")) != "installing")
+	menu.set_item_disabled(menu.get_item_index(MENU_CANCEL), state_status != "installing")
 	hint.text = ""
-	if not linux_ready:
+	if state_status == "error":
+		hint.text = str(state.get("message", "OpenCode s-a oprit. Verifică jurnalul terminalului."))
+	elif not linux_ready:
 		hint.text = "Runtime-ul Linux nu este pregătit. Instalează-l din tabul Ziva; OpenCode folosește același Debian."
+	elif state_status == "installing":
+		hint.text = str(state.get("message", "Instalez OpenCode…"))
 	elif not installed:
 		hint.text = "Instalează Node.js și OpenCode în runtime-ul aplicației. Apoi pornește terminalul și autentifică-te cu /connect în OpenCode."
-	elif str(state.get("status", "")) == "installing":
-		hint.text = str(state.get("message", "Instalez OpenCode…"))
-	elif str(state.get("status", "")) == "error":
-		hint.text = str(state.get("message", "OpenCode s-a oprit. Verifică jurnalul terminalului."))
 	elif running:
 		hint.text = "Terminalul OpenCode rulează pe proiectul curent."
 	else:

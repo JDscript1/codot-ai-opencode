@@ -1,7 +1,8 @@
 # OpenCode TUI în Godot AI Android
 
-Stare: **implementat în surse, compilat în APK și verificat automat;
-neprobat pe dispozitiv**. Data ultimei revizuiri: 2 noiembrie 2026.
+Stare: **implementat în surse; instalarea npm a fost verificată manual pe
+dispozitiv, corecțiile de instalare așteaptă un APK recompilat, iar TUI-ul
+rămâne de probat**. Data ultimei revizuiri: 2 noiembrie 2026.
 
 OpenCode este un runtime de agent opțional, separat de asistentul AI propriu.
 Aplicația afișează interfața terminal OpenCode într-un tab principal dedicat
@@ -30,7 +31,12 @@ complet funcțional dacă OpenCode nu este instalat, nu pornește sau este oprit
 2. **Instalează OpenCode** pornește un worker care:
    - verifică spațiul liber (minimum 900 MB în stocarea privată);
    - instalează `nodejs`, `npm`, `git` și `ripgrep` prin `apt-get`, dacă lipsesc;
-   - rulează `npm install --prefix /root/.local @opencode/cli@2.2.5`;
+   - fixează `registry.npmjs.org` în `/etc/hosts` din adresele rezolvate de
+     Android, apoi rulează `npm install --prefix /root/.local --omit=optional
+     @opencode/cli@2.2.5 @opencode/cli-linux-arm64@2.2.5`; sunt descărcate
+     numai arhivele CLI și ARM64, nu toate variantele de platformă;
+   - ține ecranul aprins în timpul descărcării și reia o dată instalarea dacă
+     npm raportează un cache `_cacache` corupt;
    - verifică binarul și rulează `opencode --version`.
 3. **Pornește OpenCode** creează configurația globală, pornește serverul MCP
    local, lansează PRoot + OpenCode sub PTY și încadrează terminalul peste
@@ -316,14 +322,45 @@ Artefactul este păstrat ca dovadă locală în
 `/storage/emulated/0/Download/Godot-AI-Android-arm64-debug.apk`, cu checksum
 alăturat. Pachetul nu a fost instalat.
 
+## Diagnostic pe dispozitiv — 2 noiembrie 2026
+
+APK-ul `793a4152` a fost instalat pe dispozitivul NX729J-UN prin ADB
+(`10.146.52.179:41687`). Instalarea OpenCode din UI a rămas afișată la 55% și
+nu a ajuns la terminal. Jurnalul npm
+`/root/.npm/_logs/2026-11-02T13_38_29_352Z-debug-0.log` a arătat
+`ECONNABORTED`, `exit -103`, descărcări parțiale ale tuturor pachetelor de
+platformă și un `@opencode/cli/bin/opencode.exe` de numai 229 bytes; scriptul
+`postinstall.mjs` nu apucase să ruleze. UI-ul ascundea eroarea pentru că
+`opencode_screen.gd` verifica „neinstalat” înaintea stării `error`.
+
+Cauza dominantă a fost rețeaua în Doze: ecranul se stinge, Android intră în
+`mWakefulness=Dozing` (`Device idle: true`), iar socketurile TCP ale UID-ului
+aplicației expiră. În plus, resolverul guest primea `nameserver 10.146.52.7`,
+dar `getent hosts registry.npmjs.org` întorcea `rc=2`; Android rezolva același
+host la `104.16.8.34`, iar `curl` și `ping` funcționau din shell. După trezirea
+dispozitivului, scoaterea aplicației din restricțiile de idle și adăugarea
+adresei Android în `/etc/hosts`, toate cele trei conexiuni TCP de probă
+(`registry.npmjs.org`, `deb.debian.org`, `1.1.1.1`) au reușit.
+
+Reparația manuală, în runtime-ul privat al aplicației, a șters `_cacache` și a
+rulat `npm install --prefix /root/.local --omit=optional --foreground-scripts
+@opencode/cli@2.2.5 @opencode/cli-linux-arm64@2.2.5`. Au rezultat două pachete,
+postinstall cu cod 0, un binar ARM64 de **248.433.656 bytes** și
+`opencode v2.2.5`. Corecțiile din surse fac pașii repetabili din UI:
+`synchronizeHosts` fixează și `registry.npmjs.org`, comanda npm este limitată
+la ARM64, cache-ul corupt este curățat și reîncercat, timeout-ul de fetch este
+mai mare, iar fereastra ține ecranul aprins în timpul instalării. Proba de mai
+sus a folosit ADB/`run-as`; ea nu validează încă noul cod compilat.
+
 ## Limite și pași următori
 
-- **Compilat, dar neinstalat.** Mediul local nu are Android SDK/NDK, Gradle,
-  Kotlin sau un editor Godot precompilat; compilarea a rulat în GitHub Actions.
-  APK-ul verificat nu a fost instalat pe un dispozitiv.
-- **Neprobat pe dispozitiv.** Nu au fost rulate: instalarea npm în PRoot,
-  pornirea PTY, redimensionarea, tastatura, scrollback-ul, aprobările TUI și
-  repornirea.
+- **Corecțiile nu sunt încă în APK.** Mediul local nu are Android SDK/NDK,
+  Gradle, Kotlin sau un editor Godot precompilat; compilarea rulează în GitHub
+  Actions. APK-ul `793a4152` este instalat pe dispozitiv, dar nu conține
+  modificările de DNS, npm ARM64, cache, ecran aprins și ordine a erorii.
+- **TUI-ul rămâne neprobat.** Instalarea npm a fost verificată manual, însă
+  nu au fost rulate din aplicație: pornirea PTY, redimensionarea, tastatura,
+  scrollback-ul, aprobările TUI și repornirea.
 - **Furnizor live nevalidat.** `/connect` și `/models` depind de contul și
   rețeaua utilizatorului; nu există o probă cu un furnizor real în această
   etapă.
@@ -332,8 +369,12 @@ alăturat. Pachetul nu a fost instalat.
   actualizare poate schimba numele acțiunilor sau formatul configurării și
   trebuie reverificată.
 - **Spațiu și rețea.** Instalarea cere circa 900 MB liberi și acces la
-  depozitele Debian/npm. `preparePackageNetwork` este apelat numai când lipsește
-  un utilitar; o rețea captivă sau un DNS schimbat poate cere reîncercare.
+  depozitele Debian/npm. `preparePackageNetwork` este apelat înaintea fiecărei
+  instalări npm și fixează atât `deb.debian.org`, cât și
+  `registry.npmjs.org`; o rețea captivă sau o schimbare de DNS între pregătire
+  și descărcare poate cere totuși reîncercare. Ecranul rămâne aprins numai cât
+  timp aplicația este în prim-plan; dacă utilizatorul blochează telefonul,
+  Android poate intra în Doze și poate opri transferul.
 - **O singură sesiune.** Un singur proces OpenCode rulează odată, pe un singur
   proiect. Schimbarea proiectului cere oprire și repornire; nu există încă
   migrare automată a sesiunii.
@@ -341,6 +382,7 @@ alăturat. Pachetul nu a fost instalat.
   configurat în runtime; integritatea este cea a pachetului public, nu o
   verificare proprie în aplicație.
 
-Următorii pași sunt instalarea APK-ului verificat pe un dispozitiv ARM64 cu
-Android 10+, apoi proba cap-coadă: instalare, `/connect`, `/models`, un apel
-`godot_search` și un `godot_call` cu aprobare.
+Următorii pași sunt recompilarea APK-ului cu aceste corecții, instalarea lui
+peste versiunea existentă și repetarea instalării din UI, cu ecranul aprins,
+apoi proba cap-coadă: `/connect`, `/models`, un apel `godot_search` și un
+`godot_call` cu aprobare.

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.view.WindowManager
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -27,7 +28,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 object AIOpenCodeRuntime {
     const val VERSION = "2.2.5"
     private const val CLI_PATH = "root/.local/node_modules/@opencode/cli/bin/opencode.exe"
+    private const val CLI_GUEST_PATH = "/root/.local/node_modules/@opencode/cli/bin/opencode.exe"
     private const val SHIM_PATH = "root/.local/node_modules/.bin/opencode"
+    private const val ARM64_PACKAGE = "@opencode/cli-linux-arm64"
     private const val CONFIG_PATH = "root/.config/opencode/opencode.json"
     private const val SCROLLBACK_LIMIT = 512 * 1024
     private const val TAIL_LIMIT = 12000
@@ -65,6 +68,7 @@ object AIOpenCodeRuntime {
 
     fun release(activity: Activity) {
         if (host.get() !== activity) return
+        keepScreenOn(false)
         AIOpenCodeWindow.release(activity)
         stop(activity)
     }
@@ -159,6 +163,8 @@ object AIOpenCodeRuntime {
         status = "installing"
         progress = 0
         message = "Pregătesc instalarea OpenCode…"
+        synchronized(lock) { tail.setLength(0) }
+        keepScreenOn(true)
         worker = Thread({ installWorker(context) }, "GodotOpenCodeInstall").apply { isDaemon = true; start() }
         return JSONObject().put("ok", true).put("started", true)
     }
@@ -178,14 +184,14 @@ object AIOpenCodeRuntime {
                 stage(5 + index * 14, "Instalez ${tool} în runtime-ul Linux…")
                 runtime.installTool(tool)
             }
-            stage(55, "Instalez OpenCode $VERSION (~250 MB). Poate dura câteva minute…")
-            val result = runtime.launch(listOf("/usr/bin/npm", "install", "--prefix", "/root/.local",
-                "--no-audit", "--no-fund", "--loglevel=error", "@opencode/cli@$VERSION"), null, INSTALL_TIMEOUT_SECONDS)
+            AILinuxRuntime.preparePackageNetwork(context, runtime)
+            stage(55, "Descarc OpenCode $VERSION (~250 MB). Ține aplicația deschisă; ecranul rămâne aprins…")
+            val result = npmInstall(runtime)
             check(result.getInt("exit_code") == 0) { "npm install a eșuat: " + result.optString("output").takeLast(800) }
             check(installed(context)) { "Binarele OpenCode nu au fost găsite după instalare." }
             val version = guestVersion(context)
             stage(95, "Verific instalarea OpenCode ${version.ifEmpty { VERSION }}…")
-            val probe = runtime.launch(listOf("/root/.local/node_modules/.bin/opencode", "--version"), null, 180)
+            val probe = runtime.launch(listOf(CLI_GUEST_PATH, "--version"), null, 180)
             check(probe.getInt("exit_code") == 0) { "OpenCode nu a răspuns: " + probe.optString("output").takeLast(800) }
             status = "idle"
             progress = 100
@@ -201,9 +207,50 @@ object AIOpenCodeRuntime {
             }
             progress = 0
         } finally {
+            keepScreenOn(false)
             worker = null
             cancelInstall.set(false)
             AIOpenCodeWindow.refreshStatus()
+        }
+    }
+
+    /** Install only the CLI and the ARM64 payload; all other platforms stay out. */
+    private fun npmInstall(runtime: AILinuxRuntimeFiles): JSONObject {
+        val command = listOf(
+            "/usr/bin/npm", "install", "--prefix", "/root/.local",
+            "--no-audit", "--no-fund", "--loglevel=http", "--omit=optional",
+            "--foreground-scripts", "--prefer-online", "--maxsockets=4",
+            "--fetch-retries=5", "--fetch-retry-mintimeout=2000",
+            "--fetch-retry-maxtimeout=60000", "--fetch-timeout=900000",
+            "@opencode/cli@$VERSION", "$ARM64_PACKAGE@$VERSION"
+        )
+        var result = runtime.launch(command, null, INSTALL_TIMEOUT_SECONDS)
+        if (result.getInt("exit_code") == 0) return result
+        if (!cacheFailure(result.optString("output"))) return result
+        message = "Cache-ul npm este corupt. Îl repar și reiau descărcarea…"
+        progress = 55
+        runtime.launch(listOf("/bin/sh", "-c",
+            "rm -rf /root/.npm/_cacache /root/.local/node_modules/@opencode " +
+                "/root/.local/node_modules/.bin/opencode /root/.local/node_modules/.bin/opencode2 " +
+                "/root/.local/node_modules/.package-lock.json && rm -f /root/.local/package-lock.json"), null, 120)
+        result = runtime.launch(command, null, INSTALL_TIMEOUT_SECONDS)
+        return result
+    }
+
+    private fun cacheFailure(output: String): Boolean {
+        val lower = output.lowercase()
+        return lower.contains("_cacache") || lower.contains("eintegrity") ||
+            (lower.contains("enoent") && lower.contains("content-v2")) ||
+            lower.contains("invalid response body while trying to fetch")
+    }
+
+    private fun keepScreenOn(enabled: Boolean) {
+        val activity = host.get() ?: return
+        activity.runOnUiThread {
+            runCatching {
+                if (enabled) activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
         }
     }
 
@@ -214,7 +261,12 @@ object AIOpenCodeRuntime {
             tail.append(chunk)
             if (tail.length > TAIL_LIMIT) tail.delete(0, tail.length - TAIL_LIMIT)
         }
-        message = lines.last().take(300)
+        val line = lines.last().take(300)
+        message = line
+        when {
+            line.contains("postinstall", ignoreCase = true) -> progress = maxOf(progress, 90)
+            line.contains("added ", ignoreCase = true) -> progress = maxOf(progress, 96)
+        }
     }
 
     private fun writeState(context: Context) {

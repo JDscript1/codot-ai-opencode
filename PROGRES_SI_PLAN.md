@@ -22,11 +22,12 @@ fără Termux sau un runtime suplimentar pe dispozitiv.
   instalare anulabilă, pornire/oprire/repornire, placeholder cu erori și
   încadrare nativă a terminalului peste suprafața Godot.
 - `AIOpenCodeRuntime.kt`: instalare `nodejs`, `npm`, `git` și `ripgrep` prin
-  `apt-get` când lipsesc, apoi `npm install --prefix /root/.local
-  @opencode/cli@2.2.5`; verificare binar și `--version`; stare, progres,
-  anulare, spațiu liber minim 900 MB; proiectul este montat de PRoot la
-  `/workspace`; configurarea OpenCode este actualizată fără a suprascrie
-  cheile utilizatorului.
+  `apt-get` când lipsesc, apoi `npm install --prefix /root/.local --omit=optional
+  @opencode/cli@2.2.5 @opencode/cli-linux-arm64@2.2.5`, cu retry după cache
+  npm corupt; verificare binar și `--version`; stare, progres, anulare, spațiu
+  liber minim 900 MB; ecranul rămâne aprins în timpul descărcării; proiectul
+  este montat de PRoot la `/workspace`; configurarea OpenCode este actualizată
+  fără a suprascrie cheile utilizatorului.
 - Configurare OpenCode V2: `mcp.servers.godot` de tip `remote`, fără OAuth,
   fără codemode, cu token bearer; permisiuni ordonate: `read`,
   `godot_search` și `godot_describe` permise, `edit`, `shell` și `godot_call`
@@ -93,8 +94,29 @@ de tipare GDScript (tratate ca erori), apoi erori Kotlin Android
 `FileOutputStream`) și o legătură lipsă în fixture-ul QA; toate au fost
 corectate înainte de rularea verde.
 
-**Limite.** APK-ul nu a fost instalat pe un dispozitiv. Nu au fost rulate pe
-dispozitiv instalarea npm în PRoot, pornirea PTY, redimensionarea, tastatura,
+**Diagnostic pe dispozitiv.** APK-ul `793a4152` a fost instalat pe NX729J-UN
+prin ADB (`10.146.52.179:41687`). Instalarea din UI s-a oprit la 55%; jurnalul
+npm `2026-11-02T13_38_29_352Z-debug-0.log` a arătat `ECONNABORTED`/`exit -103`,
+descărcări parțiale pentru toate platformele și un `opencode.exe` de 229 bytes,
+fără postinstall. Dispozitivul intrase în Doze (`Device idle: true`), iar
+socketurile TCP ale aplicației expirau; DNS-ul guest nu rezolva
+`registry.npmjs.org` deși Android îl rezolva la `104.16.8.34`. După trezire,
+scoaterea UID-ului din restricțiile de idle și fixarea adresei în
+`/etc/hosts`, conexiunile TCP au reușit.
+
+Reparația manuală a șters cache-ul npm corupt și a rulat `npm install
+--prefix /root/.local --omit=optional @opencode/cli@2.2.5
+@opencode/cli-linux-arm64@2.2.5`. Postinstall-ul a creat un binar ARM64 de
+**248.433.656 bytes**, iar `opencode v2.2.5` a răspuns. În surse au fost
+corectate: pinul `registry.npmjs.org` în `synchronizeHosts`, comanda npm numai
+cu pachetul ARM64, retry-ul după `_cacache` corupt, timeout-urile de fetch,
+`FLAG_KEEP_SCREEN_ON` în timpul instalării și ordinea stării `error` înaintea
+stării „neinstalat” în `opencode_screen.gd`. Testele Python ale runtime-ului
+încorporat au trecut (6/6 build, 8/8 rootfs). Proba npm a fost făcută manual
+prin ADB/`run-as`; noul APK și instalarea din UI rămân de verificat.
+
+**Limite.** Corecțiile de instalare nu sunt încă într-un APK compilat. Nu au
+fost rulate din aplicație: pornirea PTY, redimensionarea, tastatura,
 scrollback-ul, aprobările TUI sau repornirea. Nu există probă live cu un
 furnizor OpenCode; `/connect` și `/models` rămân de validat pe un cont real.
 CLI-ul este fixat la `2.2.5`, iar o actualizare poate schimba numele
@@ -102,9 +124,11 @@ acțiunilor sau formatul configurației V2. O singură sesiune OpenCode rulează
 odată, pe un singur proiect. Detalii: `docs/OPENCODE_RUNTIME.md`.
 
 Jurnal: 2.11.2026 — AG-84, tab OpenCode, runtime npm în PRoot, PTY nativ,
-terminal xterm și server MCP cu unelte Godot; APK ARM64 compilat și verificat
-în GitHub Actions, apoi livrat în Download cu SHA-256 și un singur installer
-al fork-ului. Instalarea și proba pe dispozitiv rămân de făcut.
+terminal xterm și server MCP cu unelte Godot; APK ARM64 compilat, verificat în
+GitHub Actions și livrat în Download. Pe NX729J-UN s-a diagnosticat oprirea la
+55%: Doze, DNS guest și cache npm corupt; instalarea a fost reparată manual
+până la `opencode v2.2.5`, iar sursele au fost corectate pentru un APK
+următor. TUI-ul și furnizorul live rămân de probat.
 
 ## AG-83 — OmniRoute self-hosted cu cheie API, Termux sau hotspot — 2.11.2026
 

@@ -34,10 +34,20 @@ object AILinuxRuntime {
     internal fun preparePackageNetwork(context: Context, runtime: AILinuxRuntimeFiles) {
         val connectivity = context.getSystemService(ConnectivityManager::class.java)
         val network = connectivity.activeNetwork
-        val addresses = if (network != null) network.getAllByName("deb.debian.org").toList()
-            else java.net.InetAddress.getAllByName("deb.debian.org").toList()
-        val ipv4 = addresses.filterIsInstance<java.net.Inet4Address>()
-        runtime.synchronizePackageHosts((if (ipv4.isNotEmpty()) ipv4 else addresses).mapNotNull { it.hostAddress })
+        fun resolve(host: String): List<String> = try {
+            val addresses = if (network != null) network.getAllByName(host).toList()
+                else java.net.InetAddress.getAllByName(host).toList()
+            val ipv4 = addresses.filterIsInstance<java.net.Inet4Address>()
+            (if (ipv4.isNotEmpty()) ipv4 else addresses).mapNotNull { it.hostAddress }
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val hosts = linkedMapOf(
+            "deb.debian.org" to resolve("deb.debian.org"),
+            "registry.npmjs.org" to resolve("registry.npmjs.org")
+        ).filterValues { it.isNotEmpty() }
+        check(hosts.isNotEmpty()) { "Nu pot pregăti descărcarea: telefonul nu are internet sau DNS-ul nu răspunde." }
+        runtime.synchronizeHosts(hosts)
     }
     private fun failure(message: String, code: String = "runtime_error") = JSONObject().put("ok", false).put("error", message).put("code", code)
 
