@@ -63,6 +63,9 @@ bytes, package `com.jdscript.godotai.debug`, SHA-256
 Ambele nume stabile și fișierele `.sha256` au înlocuit versiunile anterioare;
 APK-ul standard nu a fost instalat în această etapă. Artefactele descărcate sunt
 păstrate în `.ai-qa/omniroute-ziva/` și `.ai-qa/omniroute-standard/`.
+Modificarea este propusă în
+[PR #3](https://github.com/JDscript1/godot-ai-android/pull/3), cu baza pe
+`fix/siwc-stream-terminal`.
 
 **Limite.** Nu există încă o probă live: la verificare nu asculta niciun server
 OmniRoute pe `127.0.0.1:20128`, iar cheia utilizatorului nu a fost disponibilă.
