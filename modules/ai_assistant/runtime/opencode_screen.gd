@@ -242,7 +242,7 @@ func _sync_embed() -> void:
 	var rect := _bounds()
 	if rect.size.x <= 0 or rect.size.y <= 0:
 		return
-	var key := {"bounds": rect, "pid": backend.state.get("pid", 0)}
+	var key := {"bounds": rect, "run_id": backend.state.get("run_id", 0)}
 	if key == last_embed:
 		return
 	if not embedded and Time.get_ticks_msec() - last_embed_attempt < 3000:

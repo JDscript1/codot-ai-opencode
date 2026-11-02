@@ -9,6 +9,7 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.OutputStream
 import java.lang.ref.WeakReference
 import java.util.ArrayDeque
 import java.util.concurrent.Executors
@@ -43,7 +44,8 @@ object AIOpenCodeRuntime {
     private var worker: Thread? = null
     private val cancelInstall = AtomicBoolean(false)
     @Volatile private var process: Process? = null
-    @Volatile private var input: FileOutputStream? = null
+    @Volatile private var runId = 0
+    @Volatile private var input: OutputStream? = null
     @Volatile private var control: FileOutputStream? = null
     @Volatile private var writer: java.util.concurrent.ExecutorService? = null
     private var fifo: File? = null
@@ -102,7 +104,7 @@ object AIOpenCodeRuntime {
             .put("version", version)
             .put("linux_ready", runtime.state().optBoolean("ready"))
             .put("running", running)
-            .put("pid", if (running) process?.pid() ?: 0 else 0)
+            .put("run_id", if (running) runId else 0)
             .put("status", if (running) "running" else status)
             .put("message", message)
             .put("progress", progress)
@@ -315,7 +317,7 @@ object AIOpenCodeRuntime {
     private fun start(context: Context, arguments: JSONObject): JSONObject {
         if (process?.isAlive == true) {
             return JSONObject().put("ok", true).put("running", true).put("already", true)
-                .put("pid", process?.pid() ?: 0).put("mcp_port", mcpPort)
+                .put("run_id", runId).put("mcp_port", mcpPort)
         }
         if (!installed(context)) return failure("OpenCode nu este instalat.", "not_installed")
         val runtime = AILinuxRuntime.core(context)
@@ -331,7 +333,11 @@ object AIOpenCodeRuntime {
         val dir = directory(context)
         val controlFile = File(dir, "pty.fifo")
         if (controlFile.exists() && !controlFile.delete()) error("Canalul terminalului nu poate fi recreat.")
-        check(android.system.Os.mkfifo(controlFile.path, 384) == 0) { "Canalul terminalului nu poate fi creat." }
+        try {
+            android.system.Os.mkfifo(controlFile.path, 384)
+        } catch (failure: Exception) {
+            error("Canalul terminalului nu poate fi creat: " + failure.message)
+        }
         val native = File(context.applicationInfo.nativeLibraryDir, "libai_pty.so")
         check(native.isFile && native.canExecute()) { "Terminalul nativ lipsește din instalare." }
         val command = mutableListOf(native.absolutePath, "100", "30", controlFile.absolutePath, "--")
@@ -353,6 +359,7 @@ object AIOpenCodeRuntime {
         }
         synchronized(lock) {
             process = child
+            runId += 1
             projectPath = project.canonicalPath
             mcpPort = port
             status = "running"
@@ -369,7 +376,7 @@ object AIOpenCodeRuntime {
             startWatcher(context, child)
         }
         AIOpenCodeWindow.refreshStatus()
-        return JSONObject().put("ok", true).put("running", true).put("pid", child.pid())
+        return JSONObject().put("ok", true).put("running", true).put("run_id", runId)
             .put("mcp_port", port).put("version", guestVersion(context))
     }
 
