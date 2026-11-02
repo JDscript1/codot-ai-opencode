@@ -158,7 +158,7 @@ func _refresh() -> void:
 	var state: Dictionary = backend.state
 	var running := bool(state.get("running", false))
 	var installed := bool(state.get("installed", false))
-	var working := backend.busy()
+	var working: bool = backend.busy()
 	var linux_ready := bool(state.get("linux_ready", false))
 	status.text = backend.caption()
 	status.tooltip_text = str(state.get("message", ""))

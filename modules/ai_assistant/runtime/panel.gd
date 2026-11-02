@@ -2870,8 +2870,8 @@ func opencode_execute(name: String, args: Dictionary) -> Dictionary:
 		return Common.failure("Asistentul AI rulează deja o operație. Reîncearcă imediat.", "busy")
 	var saved_definitions := active_definitions
 	var saved_cancel := cancel
-	var saved_turn := current_turn
-	var saved_tools_turn := tools.turn_id if tools != null else ""
+	var saved_turn: String = str(current_turn)
+	var saved_tools_turn: String = str(tools.turn_id) if tools != null else ""
 	opencode_busy = true
 	opencode_turn += 1
 	current_turn = "opencode-%d" % opencode_turn

@@ -73,13 +73,13 @@ func poll() -> void:
 		if bool(peer.get("busy", false)):
 			continue
 		stream.poll()
-		var state := stream.get_status()
+		var state: int = stream.get_status()
 		if state != StreamPeerTCP.STATUS_CONNECTED:
 			peers.remove_at(index)
 			continue
-		var available := stream.get_available_bytes()
+		var available: int = stream.get_available_bytes()
 		if available > 0:
-			var chunk := stream.get_data(available)
+			var chunk: Array = stream.get_data(available)
 			if chunk[0] == OK:
 				peer["buffer"].append_array(chunk[1])
 		var buffer: PackedByteArray = peer["buffer"]
@@ -118,11 +118,11 @@ func _handle(request: Dictionary) -> String:
 		return _http(405, null, {}, {"Allow": "POST"})
 	var headers: Dictionary = request["headers"]
 	if not _authorized(headers):
-		return _http(401, {}, _rpc_error(Variant(), -32000, "Token MCP invalid."), {"WWW-Authenticate": "Bearer"})
+		return _http(401, {}, _rpc_error(null, -32000, "Token MCP invalid."), {"WWW-Authenticate": "Bearer"})
 	var body: PackedByteArray = request["body"]
 	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
 	if not parsed is Dictionary:
-		return _http(200, {}, _rpc_error(Variant(), -32700, "Corp JSON-RPC invalid."), {})
+		return _http(200, {}, _rpc_error(null, -32700, "Corp JSON-RPC invalid."), {})
 	var message: Dictionary = parsed
 	var id: Variant = message.get("id", null)
 	var rpc: String = str(message.get("method", ""))
@@ -257,7 +257,7 @@ func _rpc_error(id: Variant, code: int, text: String) -> Dictionary:
 	return {"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": text}}
 
 func _http(status: int, id: Variant, result: Dictionary, headers: Dictionary) -> String:
-	var reason := {200: "OK", 202: "Accepted", 401: "Unauthorized", 405: "Method Not Allowed"}.get(status, "OK")
+	var reason: String = {200: "OK", 202: "Accepted", 401: "Unauthorized", 405: "Method Not Allowed"}.get(status, "OK")
 	var body := ""
 	if status != 202:
 		# _rpc_error() already returns a complete JSON-RPC envelope.
@@ -321,6 +321,7 @@ func _decode_chunked(buffer: PackedByteArray, start: int) -> Dictionary:
 		offset += size + 2
 		if output.size() > MAX_BODY:
 			return {"complete": false}
+	return {"complete": false}
 
 func _find(buffer: PackedByteArray, needle: PackedByteArray, from: int) -> int:
 	if needle.is_empty() or buffer.size() < needle.size():
