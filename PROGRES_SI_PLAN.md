@@ -1,12 +1,50 @@
 # Godot AI Android — implementări, verificări și plan
 
-Ultima actualizare: **1 noiembrie 2026**.
+Ultima actualizare: **2 noiembrie 2026**.
 
 Acesta este documentul de lucru al proiectului. Se actualizează după fiecare
 etapă importantă: implementare, verificare, compilare sau livrare. „Implementat
 în surse”, „testat în editor”, „compilat în APK” și „verificat pe dispozitiv”
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
+
+## AG-81 — terminale ChatGPT/SIWC: `response.done`, JSON și diagnostic — 2.11.2026
+
+**Defect raportat pe dispozitiv.** Modelele din abonamentul ChatGPT nu
+răspundeau. `gpt-6-luna`, `gpt-6.1-sol` și `gpt-5.6-luna` se opreau cu
+`incomplete_stream` după trei cereri și două retry-uri; `gpt-5.6-terra` a
+rămas în așteptare peste 90 de secunde. Catalogul și autentificarea funcționau,
+deci problema era în terminarea fluxului Responses/SIWC, nu în token.
+
+**Corectat în surse.** `providers.gd` acceptă acum și evenimentul terminal
+`response.done`, verifică `status` și `error`, păstrează continuarea pentru
+`max_output_tokens` și tratează `failed`/`cancelled` ca erori. Dacă serverul
+returnează un răspuns JSON complet în loc de SSE, adaptorul îl acceptă atât
+pentru obiectul `Response`, cât și pentru erori. Când fluxul rămâne fără
+terminal, mesajul include acum statusul HTTP, `Content-Type`, numărul de
+evenimente și până la opt tipuri SSE, fără conținutul răspunsului. Astfel un
+event terminal nou poate fi identificat în următorul test real.
+
+**Verificat.** Parserul GDScript a trecut local pe `providers.gd` și pe
+snippetul noilor teste. În rularea
+[41408585327](https://github.com/JDscript1/godot-ai-android/actions/runs/41408585327),
+pasul `Test embedded runtime with upstream Godot` a trecut, iar jobul Android a
+produs APK-ul Ziva. Testele noi acoperă `response.done` completed/incomplete/
+failed, fallback-ul JSON, eroarea JSON și diagnosticul cu tipuri SSE. Randarea
+și editorul nativ erau încă în lucru la momentul acestei note.
+
+APK-ul Ziva este în `/storage/emulated/0/Download/Godot-AI-Ziva-arm64-debug.apk`:
+112.595.714 bytes, package `com.jdscript.godotai.ziva.debug`, SHA-256
+`35048fc5f6878c0a82c0154e5532ae9ec32cde2f390a6d1019be4293160df190`.
+ADB s-a deconectat înainte de instalare, deci nu a fost instalat automat.
+
+**Limite.** Nu există încă o probă live după corecție. Dacă OpenAI închide
+fluxul fără niciun eveniment terminal, mesajul de diagnostic va arăta tipurile
+primite și va confirma dacă problema este upstream. OpenCode free-tier rămâne
+restricționat la clientul oficial și nu este tratat de această corecție.
+
+Jurnal: 2.11.2026 — AG-81, terminare SIWC robustă și diagnostic SSE; APK Ziva
+compilat, testul live pe abonament rămâne de făcut.
 
 ## AG-80 — OpenCode Zen ca furnizor API cu rutare pe model — 1.11.2026
 
