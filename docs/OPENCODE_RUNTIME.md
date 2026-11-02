@@ -1,6 +1,6 @@
 # OpenCode TUI în Godot AI Android
 
-Stare: **implementat în surse, verificat static; necompilat încă în APK și
+Stare: **implementat în surse, compilat în APK și verificat automat;
 neprobat pe dispozitiv**. Data ultimei revizuiri: 2 noiembrie 2026.
 
 OpenCode este un runtime de agent opțional, separat de asistentul AI propriu.
@@ -17,9 +17,9 @@ complet funcțional dacă OpenCode nu este instalat, nu pornește sau este oprit
   skills și engineering.
 - **Nu este** un al doilea asistent încorporat în chatul propriu. Conversația,
   aprobările și comanda `/connect` aparțin OpenCode.
-- **Nu este** instalat în APK. Node.js, npm și CLI-ul OpenCode se descarcă la
-  cerere în stocarea privată a aplicației; APK-ul crește doar cu ajutorul PTY
-  nativ și cu activele terminalului (xterm.js).
+- **CLI-ul nu este împachetat** în APK. Node.js, npm și CLI-ul OpenCode se
+  descarcă la cerere în stocarea privată a aplicației; APK-ul crește doar cu
+  ajutorul PTY nativ și cu activele terminalului (xterm.js).
 - **Nu folosește** vault-ul de chei al asistentului. Furnizorii și modelele
   OpenCode se configurează prin `/connect` și `/models` în TUI.
 
@@ -301,13 +301,24 @@ Workflow-ul Android verifică suplimentar, în APK-ul construit:
 - `lib/arm64-v8a/libai_pty.so` este ELF 64-bit, PIE și AArch64;
 - există `terminal.html`, `xterm.js`, `addon-fit.js`, `xterm.css` și `LICENSE`;
 - clasele `AIOpenCodeRuntime` și `AIOpenCodeWindow` sunt prezente în dex;
-- `AIOpenCodeEditorPlugin` este în biblioteca nativă.
+- `AIOpenCodeEditorPlugin` este în biblioteca nativă;
+- fiecare script `modules/ai_assistant/runtime/*.gd` este încorporat byte cu
+  byte în `libgodot_android.so`.
+
+Compilarea verificată este workflow-ul
+[41449899776](https://github.com/JDscript1/godot-ai-android/actions/runs/41449899776),
+pe sursa `793a4152b3567e98506d3673dffbde13f41d542f`: joburile `runtime`,
+`native-editor` și `android` au trecut. APK-ul are
+`com.jdscript.godotai.debug`, numai ARM64, **112.790.988 bytes**, SHA-256
+`78812b2dbdde1984b7779772aa61e46bfb137c20fac979830a0d643f4f7fc0fd`.
+Artefactul este păstrat ca dovadă locală în
+`~/godot-ai-artifacts/opencode-793a4152/`; nu a fost instalat sau livrat.
 
 ## Limite și pași următori
 
-- **Necompilat în APK.** Mediul local nu are Android SDK/NDK, Gradle, Kotlin
-  sau un editor Godot precompilat, deci verificările de mai sus nu dovedesc o
-  compilare reușită și cu atât mai puțin o instalare.
+- **Compilat, dar neinstalat.** Mediul local nu are Android SDK/NDK, Gradle,
+  Kotlin sau un editor Godot precompilat; compilarea a rulat în GitHub Actions.
+  APK-ul verificat nu a fost instalat pe un dispozitiv.
 - **Neprobat pe dispozitiv.** Nu au fost rulate: instalarea npm în PRoot,
   pornirea PTY, redimensionarea, tastatura, scrollback-ul, aprobările TUI și
   repornirea.
@@ -328,7 +339,6 @@ Workflow-ul Android verifică suplimentar, în APK-ul construit:
   configurat în runtime; integritatea este cea a pachetului public, nu o
   verificare proprie în aplicație.
 
-Următorii pași sunt compilarea APK-ului, verificarea claselor și a ajutorului
-PTY în arhivă, instalarea pe un dispozitiv ARM64 cu Android 10+, apoi proba
-cap-coadă: instalare, `/connect`, `/models`, un apel `godot_search` și un
-`godot_call` cu aprobare.
+Următorii pași sunt instalarea APK-ului verificat pe un dispozitiv ARM64 cu
+Android 10+, apoi proba cap-coadă: instalare, `/connect`, `/models`, un apel
+`godot_search` și un `godot_call` cu aprobare.
