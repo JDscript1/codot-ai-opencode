@@ -92,6 +92,12 @@ class ResponsesTransport:
 		for event in events: options["on_event"].call(event)
 		return {"ok": true, "events": events}
 
+class JSONResponsesTransport:
+	extends RefCounted
+	var payload: Dictionary = {}
+	func request(_url: String, _method: int, _headers: PackedStringArray, _body: Variant, _options: Dictionary) -> Dictionary:
+		return {"ok": true, "status": 200, "headers": {"Content-Type": "application/json"}, "json": payload.duplicate(true), "events": []}
+
 class OpenCodeTransport:
 	extends RefCounted
 	var requests: Array = []
@@ -375,6 +381,7 @@ func _run() -> void:
 	await _workflow_tests(node)
 	await _harness_tests(node)
 	await _responses_continuation_tests(node)
+	await _responses_terminal_tests(node)
 	await _behavior_tests(node)
 	var pre_cancelled = await transport.request("http://127.0.0.1:1/", HTTPClient.METHOD_GET, [], null, {"allow_http": true, "cancel": {"cancelled": true}})
 	check(not pre_cancelled.get("ok", false), "Pre-cancelled requests terminate")
@@ -1362,6 +1369,33 @@ func _responses_continuation_tests(node: Node) -> void:
 		transport.batches = [[{"type": "response.failed", "response": {"error": {"message": "Fixture failed"}}}]]
 		outcome = await core.run({"auto_continue": 2}, host.hooks())
 		check(outcome.get("code") == "provider_error" and outcome.get("requests") == 1, "Responses provider failures are not silently continued: " + kind)
+
+func _responses_terminal_tests(node: Node) -> void:
+	var provider = scripts["providers"]
+	var done = {"text": "", "reasoning": "", "calls": {}, "blocks": {}, "items": [], "terminal": false, "finish": "", "usage": {}, "error": ""}
+	provider.consume_event("siwc", {"type": "response.done", "response": {"status": "completed", "output": [{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Done event"}]}]}}, done)
+	check(done["terminal"] and done["text"] == "Done event", "SIWC accepts the response.done terminal event")
+	var incomplete = {"text": "", "reasoning": "", "calls": {}, "blocks": {}, "items": [], "terminal": false, "finish": "", "usage": {}, "error": ""}
+	provider.consume_event("siwc", {"type": "response.done", "response": {"status": "incomplete", "incomplete_details": {"reason": "max_output_tokens"}, "output": [{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Partial"}]}]}}, incomplete)
+	check(incomplete["terminal"] and incomplete["finish"] == "length" and incomplete["text"] == "Partial", "A response.done max-output result is a length terminal")
+	var failed = {"text": "", "reasoning": "", "calls": {}, "blocks": {}, "items": [], "terminal": false, "finish": "", "usage": {}, "error": ""}
+	provider.consume_event("siwc", {"type": "response.done", "response": {"status": "failed", "error": {"message": "Stream failed"}}}, failed)
+	check(not failed["terminal"] and "Stream failed" in failed["error"], "A response.done failure remains a provider error")
+	var transport = JSONResponsesTransport.new()
+	transport.payload = {"object": "response", "status": "completed", "output": [{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "JSON fallback"}]}]}
+	var api = provider.new(node, FakeVault.new())
+	api.transport = transport
+	var response = await api.complete({"id": "json", "kind": "siwc", "url": "https://api.openai.com/v1"}, [{"role": "user", "content": "Ping"}], [], "fixture", "", {})
+	check(response.get("ok", false) and response.get("message", {}).get("content") == "JSON fallback", "SIWC consumes a complete JSON response when stream=true returns JSON")
+	transport.payload = {"error": {"message": "Fixture rejected"}}
+	var rejected = await api.complete({"id": "json-error", "kind": "siwc", "url": "https://api.openai.com/v1"}, [{"role": "user", "content": "Ping"}], [], "fixture", "", {})
+	check(rejected.get("code") == "provider_error" and "Fixture rejected" in str(rejected.get("error", "")), "A JSON provider error is not reported as an incomplete stream")
+	var partial_transport = ResponsesTransport.new()
+	partial_transport.batches = [[{"type": "response.created"}, {"type": "response.in_progress"}]]
+	var partial_api = provider.new(node, FakeVault.new())
+	partial_api.transport = partial_transport
+	var interrupted = await partial_api.complete({"id": "partial", "kind": "siwc", "url": "https://api.openai.com/v1"}, [{"role": "user", "content": "Ping"}], [], "fixture", "", {})
+	check(interrupted.get("code") == "incomplete_stream" and "response.created" in str(interrupted.get("error", "")) and "2 evenimente" in str(interrupted.get("error", "")), "Incomplete SIWC diagnostics retain event types and count without response content")
 
 func _harness_tests(node: Node) -> void:
 	var core = scripts["harness"].new(node)

@@ -383,11 +383,22 @@ func complete(profile: Dictionary, messages: Array, tools: Array, model: String,
 	if not result.get("ok", false):
 		if result.get("code") == "timeout" and result.get("stage") in ["response", "body"]: return Common.failure("Modelul nu a mai trimis date în intervalul de așteptare. Verifică încărcarea și resursele serverului înainte de reluare.", "inference_timeout")
 		return result
-	# Some otherwise compatible local servers return a complete JSON message despite stream=true.
-	if kind == "chat" and result.get("events", []).is_empty() and result.get("json") is Dictionary:
-		consume_event(kind, result["json"], collected)
+	# Some compatible servers return a complete JSON response despite stream=true.
+	if result.get("events", []).is_empty() and result.get("json") is Dictionary:
+		var payload: Dictionary = result["json"]
+		if kind in ["responses", "siwc"]:
+			if payload.has("type") or payload.has("error"):
+				consume_event(kind, payload, collected)
+			else:
+				var response: Variant = payload.get("response", payload)
+				if response is Dictionary and (response.has("status") or response.has("output") or str(response.get("object", "")) == "response"):
+					consume_event(kind, {"type": "response.done", "response": response}, collected)
+				else:
+					return _stream_failure(result, "Răspunsul nu conține un obiect Response.")
+		else:
+			consume_event(kind, payload, collected)
 	if not str(collected["error"]).is_empty(): return Common.failure(str(collected["error"]), "provider_error")
-	if not collected["terminal"]: return Common.failure("Fluxul s-a încheiat înaintea confirmării de finalizare.", "incomplete_stream")
+	if not collected["terminal"]: return _stream_failure(result)
 	var calls = []
 	for index in collected["calls"]:
 		var item: Dictionary = collected["calls"][index]
@@ -497,6 +508,31 @@ static func build_request(kind: String, messages: Array, tools: Array, model: St
 		else: body["max_tokens"] = max_output_tokens
 	return {"path": path, "body": body}
 
+static func _stream_failure(result: Dictionary, detail: String = "Fluxul s-a încheiat înaintea confirmării de finalizare.") -> Dictionary:
+	var metadata: Array[String] = []
+	var status = int(result.get("status", 0))
+	if status > 0: metadata.append("HTTP %d" % status)
+	var headers: Variant = result.get("headers", {})
+	if headers is Dictionary:
+		for key in headers:
+			if str(key).to_lower() == "content-type":
+				var content_type = str(headers[key]).strip_edges().left(80)
+				if not content_type.is_empty(): metadata.append(content_type)
+				break
+	var events: Variant = result.get("events", [])
+	if events is Array:
+		var types: Array[String] = []
+		for event in events:
+			if not event is Dictionary: continue
+			var event_type = str(event.get("type", event.get("_event", "")))
+			if event_type.is_empty() or event_type in types: continue
+			types.append(event_type)
+			if types.size() >= 8: break
+		metadata.append("%d evenimente" % events.size())
+		if not types.is_empty(): metadata.append("tipuri: " + ", ".join(types))
+	var suffix = " (" + "; ".join(metadata) + ")" if not metadata.is_empty() else ""
+	return Common.failure(detail + suffix, "incomplete_stream")
+
 static func consume_event(kind: String, event: Dictionary, state: Dictionary) -> void:
 	if event.has("error"):
 		state["error"] = JSON.stringify(event["error"])
@@ -504,16 +540,30 @@ static func consume_event(kind: String, event: Dictionary, state: Dictionary) ->
 	if kind in ["responses", "siwc"]:
 		match str(event.get("type", "")):
 			"response.output_text.delta": state["text"] += str(event.get("delta", ""))
-			"response.completed", "response.incomplete":
-				var response: Dictionary = event.get("response", {})
-				var incomplete = event.get("type") == "response.incomplete"
-				if incomplete and response.get("incomplete_details", {}).get("reason") != "max_output_tokens":
+			"response.completed", "response.incomplete", "response.done":
+				var response_value: Variant = event.get("response", {})
+				if not response_value is Dictionary:
+					state["error"] = JSON.stringify(event)
+					return
+				var response: Dictionary = response_value
+				var terminal_type = str(event.get("type", ""))
+				var status = str(response.get("status", ""))
+				var response_error: Variant = response.get("error")
+				if (terminal_type == "response.done" and status in ["failed", "cancelled"]) or response_error != null:
+					state["error"] = JSON.stringify(response_error if response_error != null else response)
+					return
+				var incomplete = terminal_type == "response.incomplete" or status == "incomplete"
+				var incomplete_details: Variant = response.get("incomplete_details", {})
+				var reason = str(incomplete_details.get("reason", "")) if incomplete_details is Dictionary else ""
+				if incomplete and reason != "max_output_tokens":
 					state["error"] = JSON.stringify(event)
 					return
 				state["terminal"] = true
 				state["finish"] = "length" if incomplete else "stop"
 				# A truncated function call is never executable or sent back as an orphan call.
-				state["items"] = response.get("output", []).filter(func(item: Dictionary) -> bool: return not incomplete or item.get("type") != "function_call")
+				var output: Variant = response.get("output", [])
+				var items: Array = output if output is Array else []
+				state["items"] = items.filter(func(item: Dictionary) -> bool: return not incomplete or item.get("type") != "function_call")
 				state["usage"] = response.get("usage", {})
 				var final_text = ""
 				for item in state["items"]:
