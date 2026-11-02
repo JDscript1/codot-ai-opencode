@@ -1,6 +1,6 @@
 # Godot AI Android — implementări, verificări și plan
 
-Ultima actualizare: **2 noiembrie 2026**.
+Ultima actualizare: **3 noiembrie 2026**.
 
 Acesta este documentul de lucru al proiectului. Se actualizează după fiecare
 etapă importantă: implementare, verificare, compilare sau livrare. „Implementat
@@ -94,6 +94,35 @@ de tipare GDScript (tratate ca erori), apoi erori Kotlin Android
 `FileOutputStream`) și o legătură lipsă în fixture-ul QA; toate au fost
 corectate înainte de rularea verde.
 
+**Corecțiile de instalare, compilate în CI.** Workflow-ul
+[41461840367](https://github.com/JDscript1/godot-ai-android/actions/runs/41461840367),
+pe sursa `47a8c87f677068b8868ea483d564498bfa2e3d92` din ramura
+`build/opencode-install-fix-20261102T152500Z`, a trecut toate joburile.
+Runtime-ul a raportat **1002 aserțiuni, 0 eșecuri**; editorul nativ **992/0**
+în fiecare dintre cele cinci configurații; randarea **961/0** în fiecare dintre
+cele cinci configurații; companionul **9/9**; jobul Android a verificat
+semnătura, package-ul, ABI ARM64, bibliotecile native și scripturile
+încorporate. APK-ul nou are `com.jdscript.godotai.debug`, numai `arm64-v8a`,
+**112.793.972 bytes**, SHA-256
+`eb066f62709fa97cd43fb43e58d6f61c7e3854c5fd1d71af95afce4887058aa1`; certificatul
+de semnare este `2e0a80969c099f7ff72bfe0c0cd33d98ebdd0e64bbf9729294df0b11665fcab5`.
+În APK au fost reconfirmate `libai_pty.so` ca ELF64 PIE AArch64, cele cinci
+active xterm, clasele `AIOpenCodeRuntime`/`AIOpenCodeWindow` și toate cele
+**47 de scripturi** byte cu byte. Artefactul este păstrat în
+`~/godot-ai-artifacts/opencode-install-fix-47a8c87f/`.
+
+**Instalat peste versiunea veche.** `adb install -r` a reușit pe NX729J-UN;
+`base.apk` instalat are exact SHA-256-ul de mai sus, iar datele aplicației au
+fost păstrate: rootfs-ul, instalarea OpenCode de **248.433.656 bytes** și
+configurația au rămas intacte. Din runtime-ul noului APK, prin PRoot,
+`opencode v2.2.5` a răspuns din nou. Instalatorul din Download a fost
+înlocuit cu numele stabil `Godot-AI-Android-arm64-debug.apk` și checksum
+alăturat; copia veche este păstrată ca dovadă în
+`~/godot-ai-artifacts/opencode-install-fix-47a8c87f/previous/`. În Download a
+rămas un singur installer al fork-ului. UI-ul nu a putut fi confirmat vizual:
+dispozitivul a rămas pe ecranul de blocare/AOD, iar deblocarea facială a
+eșuat; prin urmare pornirea tabului și TUI-ul rămân neprobate.
+
 **Diagnostic pe dispozitiv.** APK-ul `793a4152` a fost instalat pe NX729J-UN
 prin ADB (`10.146.52.179:41687`). Instalarea din UI s-a oprit la 55%; jurnalul
 npm `2026-11-02T13_38_29_352Z-debug-0.log` a arătat `ECONNABORTED`/`exit -103`,
@@ -112,23 +141,27 @@ corectate: pinul `registry.npmjs.org` în `synchronizeHosts`, comanda npm numai
 cu pachetul ARM64, retry-ul după `_cacache` corupt, timeout-urile de fetch,
 `FLAG_KEEP_SCREEN_ON` în timpul instalării și ordinea stării `error` înaintea
 stării „neinstalat” în `opencode_screen.gd`. Testele Python ale runtime-ului
-încorporat au trecut (6/6 build, 8/8 rootfs). Proba npm a fost făcută manual
-prin ADB/`run-as`; noul APK și instalarea din UI rămân de verificat.
+încorporat au trecut (6/6 build, 8/8 rootfs). Corecțiile au fost apoi
+compilate în APK-ul `47a8c87f` și instalate pe dispozitiv; proba npm din UI
+rămâne nefăcută din cauza ecranului blocat.
 
-**Limite.** Corecțiile de instalare nu sunt încă într-un APK compilat. Nu au
-fost rulate din aplicație: pornirea PTY, redimensionarea, tastatura,
-scrollback-ul, aprobările TUI sau repornirea. Nu există probă live cu un
-furnizor OpenCode; `/connect` și `/models` rămân de validat pe un cont real.
+**Limite.** APK-ul corectat este instalat, dar UI-ul nu a putut fi confirmat
+vizual. Nu au fost rulate din aplicație: instalarea repetată din UI, pornirea
+PTY, redimensionarea, tastatura, scrollback-ul, aprobările TUI sau
+repornirea. Nu există probă live cu un furnizor OpenCode; `/connect` și
+`/models` rămân de validat pe un cont real.
 CLI-ul este fixat la `2.2.5`, iar o actualizare poate schimba numele
 acțiunilor sau formatul configurației V2. O singură sesiune OpenCode rulează
 odată, pe un singur proiect. Detalii: `docs/OPENCODE_RUNTIME.md`.
 
 Jurnal: 2.11.2026 — AG-84, tab OpenCode, runtime npm în PRoot, PTY nativ,
-terminal xterm și server MCP cu unelte Godot; APK ARM64 compilat, verificat în
-GitHub Actions și livrat în Download. Pe NX729J-UN s-a diagnosticat oprirea la
-55%: Doze, DNS guest și cache npm corupt; instalarea a fost reparată manual
-până la `opencode v2.2.5`, iar sursele au fost corectate pentru un APK
-următor. TUI-ul și furnizorul live rămân de probat.
+terminal xterm și server MCP cu unelte Godot. Pe NX729J-UN s-a diagnosticat
+oprirea la 55%: Doze, DNS guest și cache npm corupt. Sursele au fost corectate,
+CI-ul [41461840367](https://github.com/JDscript1/godot-ai-android/actions/runs/41461840367)
+a trecut, iar APK-ul `47a8c87f` a fost verificat, instalat peste versiunea
+veche, cu datele și `opencode v2.2.5` păstrate, apoi livrat în Download.
+TUI-ul și furnizorul live rămân de probat; ecranul blocat a împiedicat
+confirmarea vizuală.
 
 ## AG-83 — OmniRoute self-hosted cu cheie API, Termux sau hotspot — 2.11.2026
 

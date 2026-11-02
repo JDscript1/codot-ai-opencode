@@ -1,8 +1,8 @@
 # OpenCode TUI în Godot AI Android
 
-Stare: **implementat în surse; instalarea npm a fost verificată manual pe
-dispozitiv, corecțiile de instalare așteaptă un APK recompilat, iar TUI-ul
-rămâne de probat**. Data ultimei revizuiri: 2 noiembrie 2026.
+Stare: **implementat în surse, compilat în APK și instalat pe dispozitiv;
+corecțiile de instalare sunt incluse, iar OpenCode instalat rulează, dar TUI-ul
+rămâne de probat**. Data ultimei revizuiri: 3 noiembrie 2026.
 
 OpenCode este un runtime de agent opțional, separat de asistentul AI propriu.
 Aplicația afișează interfața terminal OpenCode într-un tab principal dedicat
@@ -320,7 +320,26 @@ pe sursa `793a4152b3567e98506d3673dffbde13f41d542f`: joburile `runtime`,
 Artefactul este păstrat ca dovadă locală în
 `~/godot-ai-artifacts/opencode-793a4152/` și a fost livrat în
 `/storage/emulated/0/Download/Godot-AI-Android-arm64-debug.apk`, cu checksum
-alăturat. Pachetul nu a fost instalat.
+alăturat. Pachetul a fost instalat ulterior pe dispozitiv, apoi înlocuit de
+build-ul cu corecțiile de instalare.
+
+Corecțiile de instalare au fost compilate în workflow-ul
+[41461840367](https://github.com/JDscript1/godot-ai-android/actions/runs/41461840367),
+pe sursa `47a8c87f677068b8868ea483d564498bfa2e3d92`: joburile `runtime`,
+`native-editor` și `android` au trecut (runtime 1002/0, editor nativ 992/0 în
+cinci configurații, randare 961/0 în cinci configurații, companion 9/9).
+APK-ul are **112.793.972 bytes**, SHA-256
+`eb066f62709fa97cd43fb43e58d6f61c7e3854c5fd1d71af95afce4887058aa1`, certificatul
+`2e0a80969c099f7ff72bfe0c0cd33d98ebdd0e64bbf9729294df0b11665fcab5`,
+numai ARM64, iar toate cele 47 de scripturi și cele cinci active au fost
+reconfirmate. A fost instalat prin `adb install -r` peste build-ul `793a4152`;
+`base.apk` instalat are exact același SHA-256, iar rootfs-ul și instalarea
+OpenCode au fost păstrate. Din runtime-ul noului APK, `opencode v2.2.5` a
+răspuns. Instalatorul din Download a fost înlocuit, cu checksum alăturat;
+copia veche este păstrată în
+`~/godot-ai-artifacts/opencode-install-fix-47a8c87f/previous/`. UI-ul nu a
+putut fi confirmat vizual, deoarece dispozitivul a rămas pe ecranul de
+blocare/AOD și deblocarea facială a eșuat.
 
 ## Diagnostic pe dispozitiv — 2 noiembrie 2026
 
@@ -350,16 +369,19 @@ postinstall cu cod 0, un binar ARM64 de **248.433.656 bytes** și
 `synchronizeHosts` fixează și `registry.npmjs.org`, comanda npm este limitată
 la ARM64, cache-ul corupt este curățat și reîncercat, timeout-ul de fetch este
 mai mare, iar fereastra ține ecranul aprins în timpul instalării. Proba de mai
-sus a folosit ADB/`run-as`; ea nu validează încă noul cod compilat.
+sus a folosit ADB/`run-as`; noul APK conține corecțiile, dar fluxul din UI nu a
+putut fi repetat din cauza ecranului blocat.
 
 ## Limite și pași următori
 
-- **Corecțiile nu sunt încă în APK.** Mediul local nu are Android SDK/NDK,
-  Gradle, Kotlin sau un editor Godot precompilat; compilarea rulează în GitHub
-  Actions. APK-ul `793a4152` este instalat pe dispozitiv, dar nu conține
-  modificările de DNS, npm ARM64, cache, ecran aprins și ordine a erorii.
-- **TUI-ul rămâne neprobat.** Instalarea npm a fost verificată manual, însă
-  nu au fost rulate din aplicație: pornirea PTY, redimensionarea, tastatura,
+- **UI-ul nu a fost confirmat după instalare.** Mediul local nu are Android
+  SDK/NDK, Gradle, Kotlin sau un editor Godot precompilat; compilarea rulează
+  în GitHub Actions. APK-ul `47a8c87f` este instalat pe dispozitiv, dar
+  dispozitivul a rămas pe ecranul de blocare/AOD, iar deblocarea facială a
+  eșuat. Nu s-a putut verifica vizual tabul OpenCode sau starea „instalat”.
+- **TUI-ul rămâne neprobat.** Instalarea npm a fost verificată manual, iar
+  binarul rezultat rulează din APK-ul nou. Nu au fost rulate din aplicație:
+  instalarea repetată din UI, pornirea PTY, redimensionarea, tastatura,
   scrollback-ul, aprobările TUI și repornirea.
 - **Furnizor live nevalidat.** `/connect` și `/models` depind de contul și
   rețeaua utilizatorului; nu există o probă cu un furnizor real în această
@@ -382,7 +404,6 @@ sus a folosit ADB/`run-as`; ea nu validează încă noul cod compilat.
   configurat în runtime; integritatea este cea a pachetului public, nu o
   verificare proprie în aplicație.
 
-Următorii pași sunt recompilarea APK-ului cu aceste corecții, instalarea lui
-peste versiunea existentă și repetarea instalării din UI, cu ecranul aprins,
-apoi proba cap-coadă: `/connect`, `/models`, un apel `godot_search` și un
-`godot_call` cu aprobare.
+Următorii pași sunt deblocarea dispozitivului, repetarea instalării din UI cu
+ecranul aprins și proba cap-coadă: `/connect`, `/models`, un apel
+`godot_search` și un `godot_call` cu aprobare.
