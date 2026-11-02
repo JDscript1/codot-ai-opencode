@@ -392,6 +392,7 @@ func _run() -> void:
 	if not mock_url.is_empty():
 		await _network_tests(node)
 		await _local_connection_tests(node)
+		await _omniroute_tests(node)
 		await _opencode_tests(node)
 		await _cloud_generation_tests(node)
 		await _integration_tests(node)
@@ -1828,6 +1829,24 @@ func _local_connection_tests(node: Node) -> void:
 	var stopping = {"cancelled": false}
 	var stopped = await transport.request(mock_url + "/drip", HTTPClient.METHOD_GET, [], null, {"allow_http": true, "cancel": stopping, "idle_timeout": 2.0, "on_event": func(_event: Dictionary) -> void: stopping["cancelled"] = true})
 	check(stopped.get("code") == "cancelled", "Stop remains responsive during an otherwise healthy local stream")
+
+func _omniroute_tests(node: Node) -> void:
+	var script = scripts["providers"]
+	check(script.hosting({"issuer": "omniroute"}) == "local", "OmniRoute is grouped as a local/self-hosted service")
+	for entry in [["192.168.1.50", "omniroute", "http://192.168.1.50:20128/v1"], ["10.146.52.179:20128", "omniroute", "http://10.146.52.179:20128/v1"], ["http://127.0.0.1:20128/v1/models", "omniroute", "http://127.0.0.1:20128/v1"]]:
+		check(script.local_endpoint(entry[0], entry[1]).get("result") == entry[2], "OmniRoute accepts a Termux loopback or hotspot IP and fills port 20128 with /v1: " + entry[0])
+	check(script.endpoint({"issuer": "omniroute", "url": "192.168.1.50"}).get("result") == "http://192.168.1.50:20128/v1", "An OmniRoute profile normalizes a bare LAN address to its default OpenAI-compatible endpoint")
+	check(script.detect("OMNIROUTE_API_KEY=omniroute-fixture-key").get("profile", {}).get("id") == "omniroute", "OMNIROUTE_API_KEY selects OmniRoute without guessing a raw key")
+	var vault = FakeVault.new()
+	var service = script.new(node, vault)
+	var profile = {"id": "omniroute", "issuer": "omniroute", "name": "OmniRoute", "kind": "chat", "url": mock_url + "/omniroute/v1", "allow_http": true}
+	check(int((await service.list_models(profile)).get("status", 0)) == 401, "OmniRoute authentication failures stay visible before a key is saved")
+	vault.store("omniroute", "omniroute-fixture-key")
+	var listed = await service.list_models(profile)
+	check(listed.get("ok", false) and listed.get("result", []).size() == 1 and listed["result"][0].get("id") == "fixture-route-chat", "OmniRoute discovery sends the Bearer key and excludes embedding models")
+	check(listed["result"][0].get("context") == 262144 and listed["result"][0].get("capabilities", {}).get("vision", false) and listed["result"][0].get("capabilities", {}).get("tools", false), "OmniRoute catalog preserves context, image and tool capabilities")
+	var answer = await service.complete(profile, [{"role": "user", "content": "Ping"}], [], "fixture-route-chat", "", {})
+	check(answer.get("ok", false) and answer.get("message", {}).get("content") == "OmniRoute chat", "OmniRoute completes through the OpenAI-compatible chat endpoint with its saved key")
 
 func _opencode_tests(node: Node) -> void:
 	var script = scripts["providers"]

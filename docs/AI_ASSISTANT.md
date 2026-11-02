@@ -16,7 +16,9 @@ opens the same global configuration window.
   messages or Gemini generation; the harness routes the selected model automatically.
   OpenCode can restrict free-tier models to its own client, so another MCP/API
   client may receive HTTP 403 even with a valid key; paid models are not affected.
-  The current source queries models automatically after saving and can refresh an empty catalog from chat. The delivered APK still requires the separate test/list-models action. Manual model
+  OmniRoute is a self-hosted OpenAI-compatible gateway: select it, enter the
+  dashboard API key and the Termux/LAN URL, then test the catalog. The current
+  source queries models automatically after saving and can refresh an empty catalog from chat. Manual model
   IDs remain available for servers without a listing endpoint. Cloud and local/self-hosted
   services/profiles have separate headings. Advanced hosting overrides support a
   self-hosted server behind a public HTTPS domain.
@@ -58,17 +60,23 @@ No inference runtime or generation model is installed automatically.
 
 The following simplified flow is included in the current APK;
 see [behavior and connection checks](AI_BEHAVIOR_TESTS.md) for its evidence.
-Select LM Studio, Ollama or llama.cpp, enter the computer's Wi-Fi IP and press
-**Conectează**. A bare IP such as `192.168.1.20` adds the service's usual port
-(1234, 11434 or 8080) and `/v1` automatically. The same action saves the profile,
-checks the catalog and selects an available loaded model when reported.
-The token field is optional for an unauthenticated local server; advanced settings
-are not needed for this flow. An explicit `http://` URL uses its specified port,
-or standard port 80 when omitted, rather than guessing a service port.
+Select LM Studio, Ollama, llama.cpp or OmniRoute, enter the server address and
+press **Conectează**. A bare IP such as `192.168.1.20` adds the service's usual
+port (1234, 11434, 8080 or 20128 for OmniRoute) and `/v1` automatically. The same
+action saves the profile, checks the catalog and selects an available loaded model
+when reported. The token field is optional for an unauthenticated local server;
+advanced settings are not needed for this flow. An explicit `http://` URL uses its
+specified port, or standard port 80 when omitted, rather than guessing a service
+port.
 
 Use the computer's LAN IP, not `127.0.0.1`, which means the current device.
-A custom port/path or authenticated HTTPS address can be entered manually.
-Local/self-hosted hosting can be selected explicitly for custom public domains.
+If OmniRoute runs in Termux on this phone, select OmniRoute and use
+`http://127.0.0.1:20128/v1`; a keyless fresh install may leave the key empty. If it
+runs on another phone or computer, use that device's hotspot/LAN address, such as
+`192.168.1.20:20128`, and the key from OmniRoute's **Dashboard → Endpoints**.
+`OMNIROUTE_API_KEY=...` is recognized as a labeled key. A custom port/path or
+authenticated HTTPS address can be entered manually. Local/self-hosted hosting
+can be selected explicitly for custom public domains.
 The model list reports loaded state and active context when the native server
 metadata is available. Ollama uses `/api/tags` and `/api/ps`; LM Studio adds its
 model metadata to the OpenAI-compatible catalog. Catalog connectivity and the
@@ -80,10 +88,12 @@ automatic duplicate inference after a response timeout.
 up to two private IPv4 /24 segments derived from local interfaces, ports
 11434/1234/8080, 48 concurrent TCP probes with bounded timeouts, then at most
 24 `/v1/models` checks. It sends no API keys and saves/connects to no server until
-you select and save it. Auth-protected endpoints, other subnets/ports, IPv6,
-VPN/interface ordering or unsupported interface enumeration may require a manual
-address. An empty model catalog can still identify a reachable server. This is
-bounded probing, not guaranteed mDNS discovery or detection of every local host.
+you select and save it. OmniRoute on port 20128 is configured by address because
+authenticated gateways cannot be probed without a key. Auth-protected endpoints,
+other subnets/ports, IPv6, VPN/interface ordering or unsupported interface
+enumeration may require a manual address. An empty model catalog can still
+identify a reachable server. This is bounded probing, not guaranteed mDNS
+discovery or detection of every local host.
 The dialog can stop discovery; no Termux, shell or external runtime is involved.
 
 On the computer, enable LM Studio's **Serve on Local Network** or configure
@@ -104,7 +114,9 @@ or reconnect to a different discovered host using a saved token.
 Sources: [LM Studio LAN hosting](https://lmstudio.ai/docs/developer/core/server/serve-on-network),
 [Ollama network binding](https://docs.ollama.com/faq#how-do-i-configure-ollama-server),
 [Ollama model catalog](https://docs.ollama.com/api/tags),
-[Ollama loaded models](https://docs.ollama.com/api/ps).
+[Ollama loaded models](https://docs.ollama.com/api/ps),
+[OmniRoute quick start](https://omniroute.hagicode.com/en-US/getting-started/quick-start/),
+[OmniRoute API reference](https://omniroute.hagicode.com/en-US/reference/api-reference/).
 
 ## Execution and recovery
 
@@ -361,7 +373,7 @@ and new file contents in red and green and retains conflict-aware restoration.
 Operations appear in expandable activity groups with details hidden initially.
 Graphite surfaces, violet accents and vector icons are shared across chat and
 settings. Provider identities use downloaded brand marks from Lobe Icons and the
-upstream llama.cpp repository; action icons use Lucide. All 61 SVGs, pinned URLs,
+upstream llama.cpp repository; action icons use Lucide. All 80 SVGs, pinned URLs,
 hashes and full licenses are kept in `modules/ai_assistant/icons/`. The artwork
 is embedded in the native module, rendered at editor scale and cached offline.
 Qwen regions share their brand mark; custom endpoints have a generic code icon.

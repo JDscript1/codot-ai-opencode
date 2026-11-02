@@ -2163,7 +2163,7 @@ func _edit_provider(index: int) -> void:
 	forms["provider"]["hosting"].select({"cloud": 1, "local": 2}.get(str(profile.get("hosting", "")), 0))
 	forms["provider"]["key"].placeholder_text = "Cheie salvată · lasă gol pentru păstrare" if not vault.read(str(profile["id"])).is_empty() else "Introdu cheia API"
 	provider_advanced.visible = profile.get("issuer") == "custom"
-	forms["provider"]["groups"]["url"].visible = profile.get("issuer") in ["ollama", "lmstudio", "llamacpp", "custom"]
+	forms["provider"]["groups"]["url"].visible = profile.get("issuer") in ["omniroute", "ollama", "lmstudio", "llamacpp", "custom"]
 	forms["provider"]["models"] = profile.get("models", []).duplicate(true)
 	forms["provider"]["selected_model"] = str(_selection().get("model", "")) if _current_profile().get("id") == profile["id"] else ""
 	forms["provider"]["catalog_status"].text = "%s modele · tarife actualizate automat la 6 ore" % profile.get("models", []).size()

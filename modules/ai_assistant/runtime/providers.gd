@@ -22,6 +22,7 @@ const CATALOG = [
 	{"id": "minimax", "name": "MiniMax", "kind": "chat", "url": "https://api.minimax.io/v1", "prefix": ""},
 	{"id": "nvidia", "name": "NVIDIA NIM", "kind": "chat", "url": "https://integrate.api.nvidia.com/v1", "prefix": "nvapi-"},
 	{"id": "siliconflow", "name": "SiliconFlow", "kind": "chat", "url": "https://api.siliconflow.cn/v1", "prefix": ""},
+	{"id": "omniroute", "name": "OmniRoute", "kind": "chat", "url": "http://127.0.0.1:20128/v1", "prefix": "", "local": true},
 	{"id": "ollama", "name": "Ollama", "kind": "chat", "url": "http://127.0.0.1:11434/v1", "prefix": "", "local": true},
 	{"id": "lmstudio", "name": "LM Studio", "kind": "chat", "url": "http://127.0.0.1:1234/v1", "prefix": "", "local": true},
 	{"id": "llamacpp", "name": "llama.cpp", "kind": "chat", "url": "http://127.0.0.1:8080/v1", "prefix": "", "local": true},
@@ -53,7 +54,7 @@ static func private_ipv4(address: String) -> bool:
 
 static func hosting(profile: Dictionary) -> String:
 	if profile.get("hosting") in ["cloud", "local"]: return profile["hosting"]
-	if profile.get("issuer", profile.get("id", "")) in ["ollama", "lmstudio", "llamacpp"]: return "local"
+	if profile.get("issuer", profile.get("id", "")) in ["omniroute", "ollama", "lmstudio", "llamacpp"]: return "local"
 	var parsed = Common.parse_url(str(profile.get("url", "")), true)
 	var host = str(parsed.get("host", "")).to_lower()
 	return "local" if host in ["localhost", "127.0.0.1", "::1"] or host.ends_with(".local") or private_ipv4(host) else "cloud"
@@ -66,7 +67,7 @@ static func endpoint(profile: Dictionary) -> Dictionary:
 			if entry["id"] == issuer and not entry.get("local", false):
 				url = str(entry["url"])
 				break
-	if issuer in ["lmstudio", "ollama", "llamacpp"]:
+	if issuer in ["omniroute", "lmstudio", "ollama", "llamacpp"]:
 		var normalized = local_endpoint(url, issuer)
 		if not normalized.get("ok", false): return normalized
 		url = str(normalized["result"])
@@ -155,7 +156,7 @@ static func local_endpoint(value: String, issuer: String) -> Dictionary:
 		var suffix = url.substr(raw_authority.length())
 		if raw_authority.is_valid_ip_address() and ":" in raw_authority: raw_authority = "[" + raw_authority + "]"
 		var has_port = "]:" in raw_authority if raw_authority.begins_with("[") else ":" in raw_authority
-		if not has_port: raw_authority += ":" + str({"lmstudio": 1234, "ollama": 11434, "llamacpp": 8080}.get(issuer, 1234))
+		if not has_port: raw_authority += ":" + str({"omniroute": 20128, "lmstudio": 1234, "ollama": 11434, "llamacpp": 8080}.get(issuer, 1234))
 		url = "http://" + raw_authority + suffix
 	var parsed = Common.parse_url(url, true)
 	if not parsed.get("ok", false): return parsed

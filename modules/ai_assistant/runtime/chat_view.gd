@@ -2586,7 +2586,7 @@ func provider_icon(profile: Dictionary) -> Texture2D:
 		elif "kimi" in service: issuer = "kimi"
 		elif "copilot" in service: return _icon("Provider_copilot")
 		else: return _icon("Accounts")
-	if not issuer in ["openai", "anthropic", "gemini", "deepseek", "openrouter", "opencode", "qwen", "kimi", "mistral", "groq", "xai", "zai", "minimax", "nvidia", "siliconflow", "ollama", "lmstudio", "llamacpp"]: issuer = "custom"
+	if not issuer in ["openai", "anthropic", "gemini", "deepseek", "openrouter", "opencode", "qwen", "kimi", "mistral", "groq", "xai", "zai", "minimax", "nvidia", "siliconflow", "omniroute", "ollama", "lmstudio", "llamacpp"]: issuer = "custom"
 	return _icon("Provider_" + issuer)
 
 func section_icon(section: String) -> Texture2D:

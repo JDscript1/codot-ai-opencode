@@ -2761,6 +2761,12 @@ func _provider_connection_tests(output: String) -> void:
 	_check(panel._save_provider(), "A local LM Studio connection still saves a manual LAN address without a token")
 	var local_id = str(form["editing"])
 	_check(panel.lists["providers"].item_count == 2 and panel.lists["providers"].get_item_text(1).contains("Local"), "Cloud and local connections remain recognizable in the saved list")
+	panel._select_issuer("omniroute")
+	form["issuer"].item_selected.emit(form["issuer"].selected)
+	_check(form["local_connection"].visible and form["groups"]["url"].visible and form["url"].text.ends_with(":20128/v1") and form["allow_http"].button_pressed, "OmniRoute exposes its loopback URL, HTTP opt-in and optional key field")
+	form["url"].text = "192.168.1.20:20128"
+	_check(panel._provider_form_profile().get("url") == "http://192.168.1.20:20128/v1", "The OmniRoute form accepts a hotspot/LAN host and fills the documented API path")
+	panel.lists["providers"].item_selected.emit(1)
 	if not output.is_empty():
 		await get_tree().create_timer(0.2).timeout
 		panel.settings_window.get_texture().get_image().save_png(output.path_join("providers-local.png"))

@@ -82,6 +82,13 @@ class Fixtures(http.server.BaseHTTPRequestHandler):
             valid = self.headers.get("Authorization") == "Bearer deepseek-fixture-token"
             self.reply({"data": [{"id": "deepseek-flash", "name": "DeepSeek-V4.1-Flash", "context_window": 1048576, "input_modalities": ["text", "image"], "effort": {"supported_levels": ["low", "high", "max"]}}, {"id": "deepseek-v4-pro", "name": "DeepSeek-V4-Pro", "context_window": 1048576, "input_modalities": ["text"], "effort": {"supported_levels": ["low", "high", "max"]}}]} if valid else {"error": "Unauthorized"}, 200 if valid else 401)
             return
+        if location.path == "/omniroute/v1/models":
+            valid = self.headers.get("Authorization") == "Bearer omniroute-fixture-key"
+            self.reply({"data": [
+                {"id": "fixture-route-chat", "name": "Fixture OmniRoute", "context_window": 262144, "input_modalities": ["text", "image"], "supported_parameters": ["tools"]},
+                {"id": "fixture-route-embedding", "type": "embedding"},
+            ]} if valid else {"error": "Unauthorized"}, 200 if valid else 401)
+            return
         if location.path == "/opencode/zen/v1/models":
             valid = self.headers.get("Authorization") == "Bearer opencode-fixture-token"
             models = [
@@ -305,6 +312,12 @@ class Fixtures(http.server.BaseHTTPRequestHandler):
         elif location.path == "/prompt":
             self.reply({"prompt_id": "fixture-job", "number": 0})
         elif location.path.endswith("/chat/completions"):
+            if location.path.startswith("/omniroute/"):
+                if self.headers.get("Authorization") != "Bearer omniroute-fixture-key":
+                    self.reply({"error": "Unauthorized"}, 401)
+                    return
+                self.sse([{"choices": [{"delta": {"content": "OmniRoute chat"}, "finish_reason": "stop"}]}])
+                return
             if location.path.startswith("/bounded/"):
                 if payload.get("max_tokens") != 512:
                     self.reply({"error": "Missing bounded summary output allowance"}, 400)

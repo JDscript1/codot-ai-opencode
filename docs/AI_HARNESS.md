@@ -75,15 +75,17 @@ Explore, General, or Playtest child. Children retain their existing restricted
 tool sets and concurrency limits.
 
 The model remains a separate service. Cloud APIs need their normal connection
-and credentials. Ollama, LM Studio, and llama.cpp profiles connect to an already
-running model endpoint. This harness does not add an inference engine or install
-model weights in the APK.
+and credentials. Ollama, LM Studio, llama.cpp, and OmniRoute profiles connect to
+an already running model endpoint. This harness does not add an inference engine
+or install model weights in the APK.
 
 Local profiles accept an IP or full API URL. **Conectează** saves the endpoint,
 tests its catalog and selects a loaded chat model where the server reports one.
-LM Studio metadata and Ollama's native tags/process endpoints provide loaded
-state and actual loaded context; unavailable metadata does not block the catalog.
-Embedding models are excluded when LM Studio reports their type.
+OmniRoute uses its dashboard API key as a Bearer token and defaults to port 20128;
+loopback works for Termux on the same phone, while hotspot/LAN peers need the
+host's reachable IP. LM Studio metadata and Ollama's native tags/process endpoints
+provide loaded state and actual loaded context; unavailable metadata does not
+block the catalog. Embedding models are excluded when LM Studio reports their type.
 
 Catalog checks have a short connection deadline. Inference uses independent
 connection, first-response, stream-inactivity and total deadlines: local profiles

@@ -63,6 +63,7 @@ def main():
                for key, slug in BRANDS.items()]
     entries += [(key, 'lucide', f'icons/{slug}.svg') for key, slug in ACTIONS.items()]
     entries.append(('Provider_llamacpp', 'ggml', 'media/llama1-icon-transparent.svg'))
+    entries.append(('Provider_omniroute', 'lucide', 'icons/route.svg'))
     for source, (repo, revision) in REVISIONS.items():
         with urllib.request.urlopen(f'https://raw.githubusercontent.com/{repo}/{revision}/LICENSE', timeout=45) as response:
             (ROOT / f'LICENSE-{source}').write_bytes(response.read())

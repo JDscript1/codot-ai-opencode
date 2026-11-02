@@ -393,5 +393,10 @@
     "file": "ggml/llama1-icon-transparent.svg",
     "url": "https://raw.githubusercontent.com/ggml-org/llama.cpp/e3797b184d428c7a019362612b76971f60af6670/media/llama1-icon-transparent.svg",
     "sha256": "611af871c3ba331afa3350d4c94e546607ccdd952c6dfd928dc94dc1e0f0b3ba"
+  },
+  "Provider_omniroute": {
+    "file": "lucide/route.svg",
+    "url": "https://raw.githubusercontent.com/lucide-icons/lucide/20aef31db93fe4d9f398dbb15b120d99c48eef95/icons/route.svg",
+    "sha256": "fc169fd38a9963b016ad6d60fd72baa2b0ea8e0cec085bbc53287297c3d8121a"
   }
 }
