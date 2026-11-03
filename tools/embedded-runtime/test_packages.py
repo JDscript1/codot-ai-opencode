@@ -39,8 +39,12 @@ class PackageLockTests(unittest.TestCase):
 
     def test_alternative_and_versioned_dependency_are_understood(self):
         records = [
-            {"Package": "target", "Version": "1.0", "Architecture": "arm64",
-             "Depends": "missing | virtual-ssl (>= 3.0), base:any"},
+            {
+                "Package": "target",
+                "Version": "1.0",
+                "Architecture": "arm64",
+                "Depends": "missing | virtual-ssl (>= 3.0), base:any",
+            },
             {"Package": "libssl", "Version": "3.0.1", "Architecture": "arm64", "Provides": "virtual-ssl"},
         ]
         index = packages.PackageIndex(records, {"base": "1.0"})
@@ -54,8 +58,12 @@ class PackageLockTests(unittest.TestCase):
 
     def test_offline_repository_has_relative_debs_and_metadata(self):
         record = {
-            "Package": "fixture", "Version": "1.0", "Architecture": "arm64",
-            "Multi-Arch": "allowed", "Description": "Fixture package", "Filename": "pool/fixture.deb",
+            "Package": "fixture",
+            "Version": "1.0",
+            "Architecture": "arm64",
+            "Multi-Arch": "allowed",
+            "Description": "Fixture package",
+            "Filename": "pool/fixture.deb",
         }
         content = b"!<arch>\nfixture"
         record.update({"Size": str(len(content)), "SHA256": hashlib.sha256(content).hexdigest()})
@@ -83,8 +91,9 @@ class PackageLockTests(unittest.TestCase):
         for name in ("node", "pi"):
             self.assertTrue(lock[name]["url"].startswith("https://"))
             self.assertRegex(lock[name]["sha256"], r"^[0-9a-f]{64}$")
-        self.assertEqual(lock["ziva"]["runtime"]["sha256"],
-                         "f485f3b0f381fe4ec40b10788f0af62bea487c94ec6d830ec811c09f24f32b39")
+        self.assertEqual(
+            lock["ziva"]["runtime"]["sha256"], "f485f3b0f381fe4ec40b10788f0af62bea487c94ec6d830ec811c09f24f32b39"
+        )
         self.assertIn("xz-utils", lock["debian"]["packages"])
 
 
