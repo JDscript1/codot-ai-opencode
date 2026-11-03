@@ -153,6 +153,7 @@ class AIZivaService : Service() {
                 AIPackageManager.installPi(this, runtime, packages, ::cancelled) { update("installing", it) }
                 AIPackageManager.installZiva(this, runtime, packages, ::cancelled) { update("installing", it) }
                 check(!cancelled()) { "Operație anulată." }
+                runtime.verify()
                 finalStatus = "installed"
                 finalMessage = "Ziva instalat · ${ziva.version}"
             } else {

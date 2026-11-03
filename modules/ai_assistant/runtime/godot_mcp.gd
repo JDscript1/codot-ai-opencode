@@ -161,7 +161,7 @@ func _handle(request: Dictionary) -> String:
 			return _http(200, id, _rpc_error(id, -32601, "Metodă MCP necunoscută: " + rpc), {})
 
 func _instructions() -> String:
-	return "Godot editor tools for this project. The catalog is registered as MCP tools; use the native tool search to discover the ones relevant to the current task. Call a discovered tool directly with its declared arguments. Full reflection access is available through godot_describe and godot_call; inspect the exact signature before calling generic methods. Plan mode exposes only read tools. Captures return image content. Change sets require prepare, status and apply. Ziva lifecycle/conversation and Blender status/setup/run tools are included when available. Every call is audited in the AI assistant journal; external side effects are never simulated."
+	return "Godot editor tools for this project. The catalog is registered as MCP tools; use the native tool search to discover the ones relevant to the current task. Call a discovered tool directly with its declared arguments. Full reflection access is available through godot_describe and godot_call; inspect the exact signature before calling generic methods. Plan mode exposes only read tools. Captures return image content. Change sets require prepare, status and apply. Ziva lifecycle/conversation and bundled Blender status/prepare/run tools are included when available. Every call is audited in the AI assistant journal; external side effects are never simulated."
 
 func _tool_list() -> Array:
 	var tools := []

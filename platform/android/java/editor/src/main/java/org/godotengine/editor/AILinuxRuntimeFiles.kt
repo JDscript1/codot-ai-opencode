@@ -26,15 +26,16 @@ class AILinuxRuntimeFiles(
 ) {
     companion object {
         const val MAX_LOG = 131072
+        private const val BLENDER_PYTHON_MARKER = "GODOT_AI_BLENDER_PYTHON_OK"
         val TOOL_PACKAGES = linkedMapOf(
             "python" to listOf("python3", "python3-venv", "python3-pip", "ca-certificates"),
             "node" to listOf("nodejs", "npm", "ca-certificates"),
             "git" to listOf("git", "ca-certificates"),
             "ripgrep" to listOf("ripgrep"),
-            "blender" to listOf("blender"),
         )
         val TOOL_PROBES = mapOf("python" to listOf("python3", "--version"), "node" to listOf("node", "--version"),
-            "git" to listOf("git", "--version"), "ripgrep" to listOf("rg", "--version"), "blender" to listOf("blender", "--background", "--version"))
+            "git" to listOf("git", "--version"), "ripgrep" to listOf("rg", "--version"),
+            "blender" to listOf("blender", "--background", "--factory-startup", "--version"))
 
         fun sha(file: File): String = file.inputStream().use { input ->
             val digest = MessageDigest.getInstance("SHA-256")
@@ -349,6 +350,13 @@ class AILinuxRuntimeFiles(
             val probe = launch(command, null, 30)
             if (probe.getInt("exit_code") == 0) tools.put(name, JSONObject().put("ready", true).put("version", probe.getString("output").lineSequence().firstOrNull().orEmpty().take(160)))
         }
+        val blender = tools.optJSONObject("blender")
+        if (blender != null) {
+            val python = launch(blenderPythonProbe(), null, 60)
+            val pythonReady = python.optInt("exit_code", -1) == 0 && python.optString("output").contains(BLENDER_PYTHON_MARKER)
+            blender.put("python", pythonReady)
+            if (!pythonReady) tools.remove("blender")
+        }
         state.put("tools", tools)
         writeJson(stateFile, state)
         return state
@@ -375,6 +383,131 @@ class AILinuxRuntimeFiles(
         check(state().optBoolean("ready")) { "Runtime Linux indisponibil." }
         check(project.isAbsolute && project.isDirectory && File(project, "project.godot").isFile && !project.path.contains(':')) { "Proiect Godot invalid." }
         return launch(listOf("/bin/sh", "-lc", command), project.canonicalFile, seconds.coerceIn(1, 600))
+    }
+
+    fun blenderStatus(): JSONObject {
+        val binary = File(root, "usr/bin/blender")
+        val result = JSONObject()
+            .put("ok", true)
+            .put("bundled", true)
+            .put("backend", "app-linux")
+            .put("requires_termux", false)
+            .put("binary", "/usr/bin/blender")
+            .put("installed", binary.isFile)
+        if (!state().optBoolean("ready")) {
+            return result.put("ready", false).put("reason", "linux_not_ready")
+                .put("error", "Runtime-ul Linux nu este pregătit.")
+        }
+        if (!binary.isFile) {
+            return result.put("ready", false).put("reason", "package_missing")
+                .put("error", "Blender nu este instalat din pachetele APK. Rulează actualizarea pachetelor.")
+        }
+        val probe = launch(listOf("/usr/bin/blender", "--background", "--factory-startup", "--version"), null, 45)
+        val output = probe.optString("output")
+        val version = output.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("Blender ") }.orEmpty()
+        val versionReady = probe.optInt("exit_code", -1) == 0 && version.isNotEmpty()
+        if (!versionReady) {
+            return result.put("ready", false).put("version", version).put("python_dependencies", false)
+                .put("probe_exit_code", probe.optInt("exit_code", -1)).put("probe_output", output.takeLast(2000))
+                .put("error", "Blender nu a trecut proba de pornire.")
+        }
+        val python = launch(blenderPythonProbe(), null, 60)
+        val pythonReady = python.optInt("exit_code", -1) == 0 && python.optString("output").contains(BLENDER_PYTHON_MARKER)
+        val ready = pythonReady
+        return result.put("ready", ready).put("version", version).put("python_dependencies", pythonReady)
+            .put("probe_exit_code", probe.optInt("exit_code", -1))
+            .put("probe_output", output.takeLast(2000))
+            .put("python_probe_output", python.optString("output").takeLast(2000))
+            .put("capabilities", JSONObject().put("python", pythonReady).put("background", true).put("project_workspace", true))
+            .apply { if (!ready) put("error", "Blender nu a trecut proba de pornire.") }
+    }
+
+    private fun blenderPythonProbe() = listOf("/usr/bin/blender", "--background", "--factory-startup",
+        "--python-exit-code", "1", "--python-expr", "import numpy, requests, PIL; print('$BLENDER_PYTHON_MARKER')")
+
+    /**
+     * Run a project-owned Blender Python script against a project mount. The
+     * script and optional .blend are the only command inputs; declared project
+     * files stay visible under /workspace and outputs are confined to the
+     * project output directory for the application to register.
+     */
+    fun blenderRun(project: File, args: JSONObject, seconds: Int): JSONObject {
+        check(project.isAbsolute && project.isDirectory && File(project, "project.godot").isFile && !project.path.contains(':')) { "Proiect Godot invalid." }
+        val status = blenderStatus()
+        check(status.optBoolean("ready")) { status.optString("error", "Blender nu este disponibil.") }
+        val script = projectRelative(args.optString("script"), "Scriptul Blender")
+        require(script.endsWith(".py")) { "Scriptul Blender trebuie să fie .py." }
+        val scriptFile = safeProjectFile(project, script)
+        check(scriptFile.isFile) { "Scriptul Blender nu există în proiect." }
+        val rawBlend = args.optString("blend")
+        val blend = if (rawBlend.isBlank()) null else {
+            val relative = projectRelative(rawBlend, "Fișierul .blend")
+            require(relative.endsWith(".blend")) { "Fișierul Blender trebuie să fie .blend." }
+            check(safeProjectFile(project, relative).isFile) { "Fișierul .blend nu există în proiect." }
+            relative
+        }
+        val outputRelative = projectRelative(args.optString("output_directory", "blender_output").ifBlank { "blender_output" },
+            "Directorul de ieșire Blender")
+        val outputDirectory = safeProjectFile(project, outputRelative)
+        check(outputDirectory.isDirectory || outputDirectory.mkdirs()) { "Directorul de ieșire Blender nu poate fi creat." }
+        check(!Files.isSymbolicLink(outputDirectory.toPath())) { "Directorul de ieșire Blender nu poate fi o legătură." }
+        val inputs = mutableListOf<String>()
+        val rawInputs = args.optJSONArray("inputs") ?: JSONArray()
+        require(rawInputs.length() <= 126) { "Prea multe fișiere de intrare Blender." }
+        for (index in 0 until rawInputs.length()) {
+            val relative = projectRelative(rawInputs.optString(index), "Fișierul de intrare Blender")
+            check(safeProjectFile(project, relative).isFile) { "Fișierul de intrare Blender lipsește: $relative" }
+            inputs.add("/workspace/$relative")
+        }
+        val command = mutableListOf("/usr/bin/blender", "--background", "--factory-startup", "--disable-autoexec")
+        if (blend != null) command.add("/workspace/$blend")
+        command.addAll(listOf("--python-exit-code", "1", "--python", "/workspace/$script"))
+        val sandbox = "/tmp/godot-ai-blender"
+        for (relative in listOf("cache", "config", "scripts", "datafiles", "extensions")) {
+            check(File(root, "tmp/godot-ai-blender/$relative").mkdirs() || File(root, "tmp/godot-ai-blender/$relative").isDirectory) {
+                "Mediul temporar Blender nu poate fi creat."
+            }
+        }
+        val before = outputDirectory.walkTopDown()
+            .filter { it.isFile && !Files.isSymbolicLink(it.toPath()) }
+            .take(4096)
+            .associate { it.canonicalPath to (it.lastModified() to it.length()) }
+        val environment = mapOf(
+            "GODOT_AI_PROJECT_DIR" to "/workspace",
+            "GODOT_AI_OUTPUT_DIR" to "/workspace/$outputRelative",
+            "GODOT_AI_INPUTS" to inputs.joinToString("\n"),
+            "PYTHONUNBUFFERED" to "1",
+            "XDG_CACHE_HOME" to "$sandbox/cache",
+            "XDG_CONFIG_HOME" to "$sandbox/config",
+            "BLENDER_USER_CONFIG" to "$sandbox/config/blender",
+            "BLENDER_USER_SCRIPTS" to "$sandbox/scripts",
+            "BLENDER_USER_DATAFILES" to "$sandbox/datafiles",
+            "BLENDER_USER_EXTENSIONS" to "$sandbox/extensions",
+        )
+        val result = launch(command, project.canonicalFile, seconds.coerceIn(1, 1800), environment)
+        val outputs = outputDirectory.walkTopDown()
+            .filter { it.isFile && !Files.isSymbolicLink(it.toPath()) }
+            .filter { before[it.canonicalPath] != (it.lastModified() to it.length()) }
+            .take(256)
+            .map { it.canonicalPath }
+            .toList()
+        return result.put("outputs", JSONArray(outputs))
+            .put("script", "/workspace/$script")
+            .put("output_directory", "/workspace/$outputRelative")
+            .put("blender", status)
+    }
+
+    private fun projectRelative(value: String, label: String): String {
+        require(value.isNotBlank() && !value.startsWith("/") && !value.contains('\\') && !value.contains('\u0000')) { "$label are o cale invalidă." }
+        require(value.split('/').none { it.isEmpty() || it == "." || it == ".." }) { "$label are o cale invalidă." }
+        return value
+    }
+
+    private fun safeProjectFile(project: File, relative: String): File {
+        val root = project.canonicalFile
+        val file = File(root, relative).canonicalFile
+        require(file.path.startsWith(root.path + File.separator)) { "Calea proiectului Blender este invalidă." }
+        return file
     }
 
     private fun stopCheck() { check(!cancelled()) { "Operație anulată." } }
@@ -413,15 +546,17 @@ class AILinuxRuntimeFiles(
         val loader = File(nativeDirectory, "libai_proot_loader.so")
         val scratch = File(base, "tmp").apply { mkdirs() }
         val environment = linkedMapOf(
-            "PATH" to "/root/.local/node_modules/.bin:/usr/local/bin:/usr/bin:/bin", "HOME" to "/root", "USER" to "root", "LANG" to "C.UTF-8",
+            "PATH" to "/root/.local/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "HOME" to "/root", "USER" to "root", "LANG" to "C.UTF-8",
             "TMPDIR" to "/tmp", "ANDROID_ROOT" to "/system", "ANDROID_DATA" to "/data", "PROOT_LOADER" to loader.absolutePath,
             "PROOT_TMP_DIR" to scratch.absolutePath, "DEBIAN_FRONTEND" to "noninteractive")
         environment.putAll(extra)
         return environment
     }
 
-    fun launch(command: List<String>, project: File?, seconds: Int): JSONObject {
-        val child = startProcess(command, project)
+    fun launch(command: List<String>, project: File?, seconds: Int,
+        extraEnvironment: Map<String, String> = emptyMap()): JSONObject {
+        val child = startProcess(command, project, extraEnvironment)
         val output = StringBuilder(); var truncated = false
         val reader = Thread({
             try { child.inputStream.bufferedReader().use { input ->

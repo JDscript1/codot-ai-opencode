@@ -60,14 +60,20 @@ Changing repositories in one project does not configure another project.
   its revision. `github_create_issue` publishes only for an explicit request under
   Auto/Default/Plan and YOLO/confirmation rules. Git clone, commits, push and PR
   creation are not implemented by these adapters.
-- Blender CLI appears only on Windows/Linux, when Blender is already installed.
+- On Windows/Linux, Blender CLI appears when Blender is already installed.
   Select its executable and verify the version. `blender_run` starts Blender
   directly with an argument array, no shell, using background/factory mode,
   disabled automatic file scripts and an explicit project Python script.
   Optional `.blend` input is project-scoped. A nonblocking process loop captures
   bounded output, supports Stop/timeout and reports nonzero/Python exit status
-  as failure. Scripts have Blender's desktop filesystem access. Android has no
-  Blender CLI control or tool, and the APK never installs Blender.
+  as failure. Scripts have Blender's desktop filesystem access.
+- On Android, Blender 4.3.2 ARM64 and its Debian dependencies are signed into
+  the APK. **Integrări → Blender** extracts them from the offline repository;
+  Termux and package downloads are not used. `blender_status` reports the
+  measured version, `blender_prepare` performs the local preparation, and
+  `blender_run` executes project Python with `/workspace` mounted and
+  `GODOT_AI_OUTPUT_DIR` scoped to the project. Process output, timeout,
+  cancellation, generated paths and exit status are returned to the agent.
 - Existing manually launched saved tasks remain on the Sarcini page.
   This adds no autonomous scheduler.
 

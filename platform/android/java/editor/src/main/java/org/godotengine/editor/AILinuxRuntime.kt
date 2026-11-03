@@ -81,6 +81,7 @@ object AILinuxRuntime {
             if (action.startsWith("ziva_")) return AIZivaRuntime.command(current, action, arguments).toString()
             if (action.startsWith("pi_")) return AIPiRuntime.command(current, action, arguments).toString()
             if (action == "packages_status") return AIPackageManager.status(current).toString()
+            if (action == "blender_status") return core(current).blenderStatus().toString()
             if (action == "packages_poll") {
                 val id = arguments.getString("id"); check(validId(id)) { "ID sarcina invalid." }
                 val file = jobFile(current, id); check(file.isFile) { "Sarcina nu există." }
@@ -111,7 +112,7 @@ object AILinuxRuntime {
                     recoverStale(job, file)
                     job.put("ok", true).toString()
                 }
-                "prepare", "install", "verify", "tool_install", "execute", "uninstall" -> {
+                "prepare", "install", "verify", "tool_install", "execute", "blender_run", "uninstall" -> {
                     if (action in listOf("install", "tool_install", "uninstall")) check(!AIZivaRuntime.isBusy(current)) { "Oprește Ziva înainte de modificarea runtime-ului Linux." }
                     val active = active(current)
                     if (action == "prepare" && active.isNotEmpty()) return JSONObject().put("ok", true).put("id", active).put("status", "running").toString()
@@ -122,6 +123,11 @@ object AILinuxRuntime {
                         check(command.isNotBlank() && command.length <= 16000 && !command.contains('\u0000')) { "Comandă invalidă." }
                         val project = File(arguments.getString("project_directory"))
                         check(project.isAbsolute && File(project, "project.godot").isFile) { "Deschide un proiect Godot." }
+                    }
+                    if (action == "blender_run") {
+                        val project = File(arguments.getString("project_directory"))
+                        check(project.isAbsolute && File(project, "project.godot").isFile) { "Deschide un proiect Godot." }
+                        check(arguments.optString("script").isNotBlank()) { "Scriptul Blender lipsește." }
                     }
                     trimJobs(current)
                     val id = UUID.randomUUID().toString()
@@ -249,6 +255,7 @@ class AILinuxRuntimeService : Service() {
                 "verify" -> runtime.verify()
                 "tool_install" -> { AILinuxRuntime.preparePackageNetwork(this, runtime); runtime.installTool(args.getString("tool")) }
                 "execute" -> runtime.execute(args.getString("command"), File(args.getString("project_directory")), args.optInt("seconds", 120))
+                "blender_run" -> runtime.blenderRun(File(args.getString("project_directory")), args, args.optInt("seconds", 300))
                 "uninstall" -> { runtime.uninstall(); runtime.state() }
                 "packages_update" -> AIPackageManager.update(this, runtime, { cancelled.get() || cancelFile.exists() }) { text ->
                     synchronized(lock) {

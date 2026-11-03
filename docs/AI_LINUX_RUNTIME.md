@@ -15,11 +15,23 @@ pentru instalarea sau dezinstalarea manuală a bazei; **Repară** apare când
 verificarea nu a reușit. Verificarea ulterioară păstrează pachetele instalate.
 Nu sunt necesare Termux, copierea comenzilor sau o aplicație companion.
 
-Utilitare opționale: **Python**, **Node.js și npm**, **Git**, **ripgrep** și
-**Blender CLI**. Ele se descarcă din depozitele Debian la acțiunea explicită
-de instalare. Sunt marcate instalate după verificarea executabilului. Baza
-Linux este verificată înaintea activării comenzilor agentului. Verificarea
-versiunii Blender nu dovedește încă modelare/randare în APK.
+Utilitare opționale: **Python**, **Node.js și npm**, **Git** și **ripgrep**.
+Ele se descarcă din depozitele Debian la acțiunea explicită de instalare. Sunt
+marcate instalate după verificarea executabilului. Baza Linux este verificată
+înaintea activării comenzilor agentului.
+
+**Blender CLI 4.3.2** nu mai este un utilitar opțional descărcat: pachetele
+Debian ARM64 și dependențele sale sunt în arhiva offline din APK. Integrări →
+Blender sau `blender_prepare` le instalează local, fără Termux și fără rețea.
+`blender_status` citește versiunea reală, iar `blender_run` execută un script
+Python din proiect prin PRoot cu proiectul montat la `/workspace`. Pachetul este
+mare (aproximativ 291 MB în arhiva de test și 800 MB adăugați la instalare),
+astfel încât pregătirea inițială durează. Verificarea versiunii nu dovedește
+singură randarea; probele GLB, render și import Godot sunt separate.
+
+Probele locale din 3.11.2026 au instalat repository-ul offline cu `Need to get
+0 B`, au randat Cycles CPU și au importat GLB-ul în Godot. Sunt dovezi pentru
+lanțul Debian/PRoot/Blender, nu pentru APK-ul Android instalat.
 
 Runtime-ul oferă o bază pentru CLI-uri și harness-uri bazate pe Node/Python.
 Nu înlocuiește automat harness-ul existent al agentului. Autentificarea,

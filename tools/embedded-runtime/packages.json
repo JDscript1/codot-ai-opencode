@@ -31,7 +31,11 @@
       "ripgrep",
       "xz-utils",
       "python3",
-      "python3-venv"
+      "python3-venv",
+      "python3-numpy",
+      "python3-requests",
+      "python3-pil",
+      "blender"
     ],
     "ziva_packages": [
       "libfontconfig1",

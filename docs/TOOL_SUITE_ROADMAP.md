@@ -103,16 +103,22 @@ regulilor de aprobare ale aplicației. Testarea pe APK și pe Ziva live este
 
 ### 1.8. Blender
 
-Existent:
+Existente:
 
-- `blender_run` — script Python din proiect, pe desktop sau prin conectorul
-  Termux; poate folosi API-ul Blender și poate genera GLB/FBX/OBJ/BLEND.
+- `blender_status` — backend-ul `app-linux`, versiunea reală, starea pachetelor
+  Debian și absența dependenței de Termux;
+- `blender_prepare` — pregătește pachetele Blender din repository-ul offline
+  semnat în APK, cu job anulabil și fără descărcare;
+- `blender_run` — script Python din proiect, cu `/workspace` montat, API complet
+  Blender și fișiere de ieșire limitate la proiect; poate genera GLB/FBX/OBJ/BLEND
+  și randări;
+- pe desktop și pe APK-urile vechi rămâne conectorul Termux/desktop existent.
 
-Lipsește din suita principală:
+Lipsește:
 
-- Blender CLI livrat în APK, fără Termux și fără descărcare ulterioară;
-- `blender_status`, `blender_cli`, `blender_render`, `blender_inspect`,
-  `blender_export`, `blender_bake`, `blender_validate`;
+- `blender_cli` pentru argumente arbitrare, dacă va fi necesar peste `blender_run`;
+- `blender_render`, `blender_inspect`, `blender_export`, `blender_bake`,
+  `blender_validate` ca unelte dedicate peste același backend;
 - profiluri de scene, unități, color management, render engine și GPU/CPU;
 - pipeline direct imagine → Blender → Godot, fără transfer prin Termux.
 
@@ -146,22 +152,26 @@ Status: **D/P**.
 
 ### Etapa 1 — Blender CLI în APK, nativ aplicației
 
-Status: **N**.
+Status: **D/T — implementat și testat local pe Debian ARM64; APK-ul rămâne de verificat**.
 
-- Adaugă `blender` și închiderea lui Debian arm64 în repository-ul offline din
-  APK. Verificarea locală arată 351 de pachete și ~262 MB comprimat; amprenta
-  dezarhivată este semnificativ mai mare și trebuie măsurată în CI.
+- `blender` 4.3.2+dfsg-2 este în lista Debian a repository-ului offline din APK.
+  Buildul local selectează 377 de pachete; `debian-offline.zip` are
+  291.488.170 bytes, iar instalarea adaugă ~800 MB. Amprenta APK finală se
+  verifică în CI.
 - Blender 4.3.2 din Debian trixie este candidatul reproductibil; alternativa
   este un build oficial ARM64 dacă aparține versiunii pe care o fixăm.
-- Elimină dependența funcției principale de Termux; păstrează conectorul doar
-  pentru compatibilitate până la migrarea completă.
+- Funcția principală nu mai consultă Termux. Conectorul vechi rămâne fallback
+  numai pentru APK-uri fără backend-ul Linux.
 - `blender_run` rulează prin Linux runtime-ul aplicației, cu proiectul montat
-  direct la `/workspace`; scriptul și fișierele de ieșire rămân în proiect.
-- Adaugă `blender_status`, `blender_cli`, `blender_render`,
-  `blender_inspect`, `blender_export`, `blender_bake` și `blender_validate`.
+  direct la `/workspace`; scriptul, `.blend` și ieșirile sunt limitate la proiect.
+- `blender_status`, `blender_prepare` și `blender_run` sunt expuse Agent AI prin
+  MCP. `blender_run` oferă API-ul Python complet; uneltele specializate
+  `blender_render`, `blender_inspect`, `blender_export`, `blender_bake` și
+  `blender_validate` rămân pasul următor peste același backend.
 - Acceptare: Blender pornește offline, versiunea este reală, un script minim
   creează un GLB importabil, o randare produce o imagine, iar uneltele Pi pot
-  executa fluxul fără Termux.
+  executa fluxul fără Termux. Primele patru condiții au trecut local; controlul
+  prin Pi/APK-ul instalat nu a fost încă validat.
 
 ### Etapa 2 — pipeline unificat de asseturi
 

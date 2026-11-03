@@ -51,7 +51,7 @@ opens the same global configuration window.
 - **MCP:** add a Streamable HTTP endpoint and optional Bearer token. For stdio,
   configure the process in the companion and connect to its `/mcp/<name>` URL.
 - **General:** YOLO, center/left/right chat placement and completion sounds.
-- **Integrări:** GitHub cu token personal și selecție de repository, Blender CLI desktop și [configurare Blender prin Termux pe Android](AI_TERMUX_BLENDER.md) inclusă în APK; validarea fizică a Intent-ului este separată.
+- **Integrări:** GitHub cu token personal și selecție de repository, Blender CLI desktop și Blender 4.3.2 ARM64 inclus în APK pe Android. Configurarea Android folosește runtime-ul Linux al aplicației, fără Termux; [conectorul Termux](AI_TERMUX_BLENDER.md) rămâne fallback istoric pentru APK-uri vechi.
   Skills și Sarcini au pagini principale proprii. Configurarea GitHub este descrisă în
   [integrations](AI_INTEGRATIONS.md).
 - **AGENT.MD:** edit project memory in `AGENT.md`; existing `AGENTS.md` is preserved.
@@ -60,13 +60,13 @@ The current installers are built from `87563a46cd` and include the Pi RPC
 harness, Meta Model API (Muse Spark Standard and Contributor), control and
 integrations, [chat files, previews, editor control, Store and real
 diff](AI_CHAT_FILES_AND_EDITOR_CONTROL.md), activity drawer, 3D preview controls,
-image-purpose rules, optional Termux/Blender setup, and the SIWC ChatGPT
+image-purpose rules, bundled Android Blender setup, and the SIWC ChatGPT
 callback/registration fixes.
-The Android Blender card has one install action, automatic verification and agent
-activation, then a compact **Blender Active** status and **Uninstall Blender**.
-Diagnostics and worker output are in Journal; package removal preserves containers
-and user files. Terminal-only Termux variants still require pasting the private
-bootstrap before setup continues automatically.
+The Android Blender card has one local preparation action, automatic version
+verification and agent activation. The packages come from the signed APK; no
+Termux bootstrap or network download is involved. Diagnostics and process output
+remain in Journal. On builders without the packaged Linux runtime, the legacy
+Termux card remains available as a fallback.
 Delivery evidence is recorded in [the project progress document](../PROGRES_SI_PLAN.md).
 
 HTTP is opt-in per local connection. `127.0.0.1` means this Android device; a server

@@ -3,13 +3,14 @@
 This directory builds PRoot and its loader for Android ARM64/API 29+. The
 result depends on Android system libraries, not on an installed Termux app.
 Python and make are build tools only. The current source also packages a pinned
-Debian filesystem, Node.js, the Pi harness, Git, ripgrep, Python and an offline
-Debian package repository into the APK. The Ziva distribution additionally
-contains the official Ziva addon/runtime, Godot Linux ARM64 and the required GUI
-libraries. Runtime installation therefore reads only APK assets; it does not
-contact npm, GitHub, nodejs.org or a Debian mirror. Blender remains an optional
-network-backed utility and is not part of the minimum package set.
-Blender and third-party agent harnesses have not been validated in the Godot APK.
+Debian filesystem, Node.js, the Pi harness, Git, ripgrep, Python, Blender 4.3.2
+and an offline Debian package repository into the APK. The Ziva distribution
+additionally contains the official Ziva addon/runtime, Godot Linux ARM64 and the
+required GUI libraries. Runtime installation therefore reads only APK assets;
+it does not contact npm, GitHub, nodejs.org or a Debian mirror. Blender is
+installed from the same signed offline repository by the bundled Blender
+preparation action. Blender and third-party agent harnesses have not yet been
+validated in the installed Godot APK.
 
 ```sh
 python3 build.py --ndk /path/to/android-ndk \

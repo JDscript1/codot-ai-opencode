@@ -138,6 +138,9 @@ object AIPackageManager {
             progress("Pachetele Debian din APK sunt deja instalate.")
             return
         }
+        check(runtime.root.usableSpace >= 2684354560L) {
+            "Spațiu insuficient pentru pachetele Debian și Blender: sunt necesari aproximativ 2,5 GB liberi."
+        }
         progress("Pregătesc repository-ul Debian offline…")
         extractDebianArchive(context, runtime, manifest, cancelled, progress)
         val packages = spec.getJSONArray("packages")
@@ -160,7 +163,7 @@ object AIPackageManager {
             "/usr/sbin/ldconfig || true\n" +
             "if command -v fc-cache >/dev/null 2>&1; then fc-cache -f >/dev/null 2>&1 || true; fi\n"
         progress("Instalez ${names.size} pachete Debian din APK, fără internet…")
-        val result = runtime.launch(listOf("/bin/sh", "-c", script), null, 2400)
+        val result = runtime.launch(listOf("/bin/sh", "-c", script), null, 5400)
         if (result.optInt("exit_code", -1) != 0) {
             error("Instalarea pachetelor Debian offline a eșuat: " + result.optString("output").takeLast(3000))
         }
@@ -236,8 +239,8 @@ object AIPackageManager {
     internal fun installZiva(context: Context, runtime: AILinuxRuntimeFiles, manifest: JSONObject,
         cancelled: () -> Boolean, progress: (String) -> Unit): AIZivaPackage {
         val zivaSpec = manifest.optJSONObject("ziva") ?: error("Pachetele Ziva lipsesc din această distribuție.")
-        check(runtime.root.usableSpace >= 2L * 1024 * 1024 * 1024) {
-            "Spațiu insuficient pentru Ziva: sunt necesari aproximativ 2 GB liberi."
+        check(runtime.root.usableSpace >= 4L * 1024 * 1024 * 1024) {
+            "Spațiu insuficient pentru Ziva și suita Blender: sunt necesari aproximativ 4 GB liberi."
         }
         val cache = File(context.cacheDir, "godot-ai-ziva-${UUID.randomUUID()}")
         check(cache.mkdirs()) { "Spațiul temporar Ziva nu poate fi creat." }
@@ -306,12 +309,14 @@ object AIPackageManager {
             } catch (_: Exception) {}
         }
         val piReady = node.isFile && node.length() > 1_000_000 && cli.isFile && piVersion == manifest.getJSONObject("pi").optString("version")
+        val blenderTool = linux.optJSONObject("tools")?.optJSONObject("blender")
+        val blenderReady = File(runtime.root, "usr/bin/blender").isFile && blenderTool?.optBoolean("ready") == true
         val linuxReady = linux.optBoolean("ready") && linux.optString("base_sha256").isNotEmpty()
         val expectedBase = try {
             context.assets.open("godot_ai/linux/package.json").bufferedReader().use { JSONObject(it.readText()).optString("source_sha256") }
         } catch (_: Exception) { "" }
         val baseCurrent = expectedBase.isNotEmpty() && linux.optString("base_sha256") == expectedBase
-        val allReady = linuxReady && baseCurrent && piReady && debianReady && (zivaSpec == null || (zivaReady && godotReady))
+        val allReady = linuxReady && baseCurrent && piReady && debianReady && blenderReady && (zivaSpec == null || (zivaReady && godotReady))
         return JSONObject().put("ok", true).put("bundled", true)
             .put("distribution", manifest.optString("distribution"))
             .put("manifest", manifest)
@@ -320,6 +325,8 @@ object AIPackageManager {
             .put("node", JSONObject().put("ready", node.isFile && node.length() > 1_000_000)
                 .put("version", manifest.getJSONObject("node").optString("version")))
             .put("pi", JSONObject().put("ready", piReady).put("version", piVersion.ifEmpty { manifest.getJSONObject("pi").optString("version") }))
+            .put("blender", JSONObject().put("bundled", true).put("ready", blenderReady).put("backend", "app-linux")
+                .put("requires_termux", false).put("version", blenderTool?.optString("version").orEmpty()))
             .put("debian", JSONObject().put("ready", debianReady).put("suite", debianSpec?.optString("suite").orEmpty())
                 .put("packages", debianSpec?.optJSONArray("packages")?.length() ?: 0))
             .put("ziva", JSONObject().put("bundled", zivaSpec != null).put("ready", zivaReady).put("version", zivaVersion))

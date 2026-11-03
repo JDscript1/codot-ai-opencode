@@ -292,6 +292,7 @@ func _ready() -> void:
 		pending.erase("turn")
 	integrations = Integrations.new(self, vault)
 	integrations.linux.changed.connect(_refresh_linux_card)
+	integrations.linux.changed.connect(_refresh_blender_card)
 	integrations.linux.diagnostic.connect(_linux_diagnostic)
 	if integrations.termux != null and not project_manager_mode:
 		integrations.termux.configure(data_directory, project_directory)
@@ -861,7 +862,7 @@ func _build_settings() -> void:
 
 func _build_packages(parent: Node) -> void:
 	var scale = EditorInterface.get_editor_scale()
-	_label(parent, "Pachetele minime sunt incluse direct în APK: Debian, Node.js, harness-ul Agent AI, iar în ediția Ziva și runtime-ul Ziva plus Godot Linux. Actualizarea nu descarcă pachete de pe internet.")
+	_label(parent, "Pachetele minime sunt incluse direct în APK: Debian, Node.js, harness-ul Agent AI, Blender CLI, iar în ediția Ziva și runtime-ul Ziva plus Godot Linux. Actualizarea nu descarcă pachete de pe internet.")
 	package_status = _label(parent, "Verific pachetele runtime…")
 	package_status.add_theme_color_override("font_color", Color("c8d4ea"))
 	package_details = _label(parent, "")
@@ -928,10 +929,11 @@ func _packages_render(state: Dictionary) -> void:
 		str(linux.get("release", "?")), str(node.get("version", "?")), str(pi.get("version", "?")), int(debian.get("packages", 0))]
 	if bool(ziva.get("bundled", false)):
 		details += " · Ziva %s · Godot %s" % [str(ziva.get("version", "?")), str(godot.get("version", "?"))]
-	details += "\nLinux %s · Debian %s · Agent AI %s" % [
+	details += "\nLinux %s · Debian %s · Agent AI %s · Blender %s" % [
 		"OK" if bool(linux.get("ready", false)) and bool(linux.get("current", false)) else "lipsește",
 		"OK" if bool(debian.get("ready", false)) else "lipsește",
-		"OK" if bool(pi.get("ready", false)) else "lipsește"]
+		"OK" if bool(pi.get("ready", false)) else "lipsește",
+		"OK" if bool(state.get("blender", {}).get("ready", false)) else "lipsește"]
 	if bool(ziva.get("bundled", false)):
 		details += " · Ziva %s · Godot %s" % ["OK" if bool(ziva.get("ready", false)) else "lipsește", "OK" if bool(godot.get("ready", false)) else "lipsește"]
 	package_details.text = details
@@ -1132,7 +1134,9 @@ func _build_integrations(parent: Node) -> void:
 	form["status"] = _label(github, "Token salvat · verifică conexiunea" if not vault.read("integration_github").is_empty() else "Neconectat")
 	github.move_child(form["status"], 1)
 	form["status"].add_theme_color_override("font_color", Color("a9b5cb"))
-	if integrations.termux != null and not integrations.linux.state.get("packaged", false):
+	if integrations.bundled_blender():
+		_build_bundled_blender(connections)
+	elif integrations.termux != null:
 		_build_termux_blender(connections)
 	elif Integrations.desktop_blender():
 		var blender = _integration_card(connections, "Blender CLI", "Models")
@@ -1146,6 +1150,20 @@ func _build_integrations(parent: Node) -> void:
 		_button(row, "Salvează", _save_connections)
 		_button(row, "Verifică", _verify_blender)
 		b["status"] = _label(blender, "Neconectat")
+
+func _build_bundled_blender(parent: Node) -> void:
+	var card = _integration_card(parent, "Blender CLI · inclus în aplicație", "Models")
+	var b = _form(card, "blender")
+	b["bundled"] = true
+	b["status"] = _label(card, "Verific Blender…")
+	b["status"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b["status"].add_theme_font_size_override("font_size", int(13 * EditorInterface.get_editor_scale()))
+	b["primary"] = _button(card, "Pregătește Blender", func() -> void: _blender_setup(str(b["primary"].get_meta("operation", "install"))))
+	b["primary"].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	b["hint"] = _label(card, "Pachetele Blender sunt în APK. Se extrag local, fără Termux și fără descărcare.")
+	b["hint"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b["hint"].add_theme_color_override("font_color", Color("a9b5cb"))
+	_refresh_blender_card()
 
 func _build_termux_blender(parent: Node) -> void:
 	var card = _integration_card(parent, "Blender", "Models")
@@ -1169,7 +1187,11 @@ func _set_blender_enabled(value: bool) -> void:
 	else: _status("Starea Blender nu a putut fi salvată.")
 
 func _refresh_blender_card() -> void:
-	if not forms.has("blender") or integrations == null or integrations.termux == null: return
+	if not forms.has("blender") or integrations == null: return
+	if bool(forms["blender"].get("bundled", false)):
+		_refresh_bundled_blender_card(forms["blender"])
+		return
+	if integrations.termux == null: return
 	var b: Dictionary = forms["blender"]
 	var backend = integrations.termux
 	var device: Dictionary = backend.state
@@ -1198,6 +1220,27 @@ func _refresh_blender_card() -> void:
 	if ready and not backend.working: _set_blender_enabled(true)
 	_refresh_journal()
 
+func _refresh_bundled_blender_card(b: Dictionary) -> void:
+	if integrations == null or integrations.linux == null or not b.has("primary"): return
+	var linux = integrations.linux
+	var state: Dictionary = linux.state
+	var tools = state.get("tools", {})
+	var tool: Dictionary = tools.get("blender", {}) if tools is Dictionary else {}
+	var ready = bool(tool.get("ready", false))
+	b["primary"].text = "Verifică Blender" if ready else "Pregătește din APK"
+	b["primary"].set_meta("operation", "verify" if ready else "install")
+	b["primary"].disabled = busy or linux.working or not bool(state.get("supported", false))
+	if linux.working:
+		b["status"].text = "Pregătesc Blender din pachetele APK…"
+	elif ready:
+		b["status"].text = "Blender %s · inclus, fără Termux" % str(tool.get("version", "")).get_slice("\n", 0)
+	else:
+		b["status"].text = "Pachetele sunt în APK, dar Blender nu este încă pregătit."
+	b["status"].add_theme_color_override("font_color", Color("8fdfb5") if ready else Color("a9b5cb"))
+	b["hint"].text = "Nu necesită Termux sau descărcări. Agent AI poate folosi API-ul Python Blender în /workspace." if ready else "Extragerea locală poate dura câteva minute și necesită oprirea sesiunilor Agent AI și Ziva."
+	if ready and not linux.working: _set_blender_enabled(true)
+	_refresh_journal()
+
 func _reveal_blender_hint() -> void:
 	await get_tree().process_frame
 	if not forms.has("blender") or not settings_window.visible or settings_tabs.current_tab != section_tabs["integrations"]: return
@@ -1214,7 +1257,16 @@ func _blender_workflow_finished(action: String, result: Dictionary) -> void:
 	_refresh_blender_card()
 
 func _blender_setup(operation: String) -> void:
-	if busy or integrations.termux.working or integrations.termux.refreshing: return
+	if busy: return
+	if forms.has("blender") and bool(forms["blender"].get("bundled", false)):
+		if integrations.linux.working: return
+		var bundled: Dictionary
+		if operation == "verify": bundled = await integrations.linux.setup("verify")
+		else: bundled = await integrations.linux.install_blender({})
+		_refresh_blender_card()
+		if not bundled.get("ok", false): _status("Blender: " + str(bundled.get("error", "pregătirea nu s-a finalizat.")))
+		return
+	if integrations.termux == null or integrations.termux.working or integrations.termux.refreshing: return
 	if operation == "install_termux":
 		integrations.termux.native("install_termux")
 		return
@@ -3319,6 +3371,10 @@ func _context_messages() -> Array:
 			var backend = integrations.termux
 			instructions += "\nAndroid Blender integration: " + JSON.stringify({"enabled": integration_settings.get("blender_enabled", false), "ready": backend.available(), "runtime": backend.runtime.get("version", ""), "capabilities": backend.runtime.get("capabilities", {}), "pending_job": not backend.pending.is_empty(), "diagnostic": backend.diagnostics()})
 			instructions += " Use blender_run when enabled and ready. When not ready, blender_run is deliberately excluded: do not repeatedly search for or describe it. Explain the supplied diagnostic and next action in one or two short sentences; do not expose internal JSON or claim Blender is absent without a discovery result. Save scripts in the project; declare dependency files in inputs, read them via GODOT_AI_PROJECT_DIR and write all outputs via GODOT_AI_OUTPUT_DIR. Save a GLB preview alongside FBX/OBJ/BLEND outputs for inspection in Godot. Respect the measured rendering capabilities. If setup or recovery is needed, direct the user to Integrări > Blender; never install packages or reset containers through a generated Blender script."
+		elif integrations.bundled_blender():
+			var blender_status = integrations.linux.blender_status()
+			instructions += "\nBundled Blender integration: " + JSON.stringify({"enabled": integration_settings.get("blender_enabled", false), "ready": blender_status.get("ready", false), "version": blender_status.get("version", ""), "backend": blender_status.get("backend", ""), "requires_termux": false, "error": blender_status.get("error", "")})
+			instructions += " Blender is packaged in the APK and runs in the app-owned Linux runtime, never through Termux. Use blender_status first. If packages are not ready, use blender_prepare only when the user asked for Blender; it installs the signed local package set and does not download anything. Once ready, use blender_run with a saved project Python script. The project is /workspace; read declared inputs there and write outputs under GODOT_AI_OUTPUT_DIR. Save GLB previews for Godot. Never claim a render, bake or export succeeded without checking the returned exit code, output paths and actual files."
 		instructions += "\nIntegrated Linux runtime: " + JSON.stringify({"enabled": integration_settings.get("linux_enabled", false), "ready": integrations.linux.available(), "tools": integrations.linux.state.get("tools", {})})
 		instructions += " The direct-provider harness runs in Godot. Optional Linux commands and CLI agents run only when the supplied runtime is ready. Do not repeatedly search for unavailable Linux tools. Install utilities only when the user requests them. Native scene tools and GLB previews remain in Godot. A CLI binary version check alone does not establish a working harness integration."
 		var snapshot = tools.execute("godot_project", {}, 0, false)
@@ -3396,11 +3452,12 @@ func _running_tool_label(name: String, args: Dictionary = {}) -> String:
 				if str(job.get("id", "")) == str(args.get("job", "")): kind = str(job.get("kind", "")); break
 		var generator = "3D Generator" if kind == "mesh" else ("Image Generator" if kind == "image" else "Asset Generator")
 		return "Running " + generator + " Tool" + ({"asset_wait": " · Waiting for result", "asset_status": " · Checking result"}.get(name, ""))
-	var names = {"ziva_task": "Ziva Delegation", "ziva_task_poll": "Ziva Delegation · Waiting", "ziva_task_result": "Ziva Answer Reader", "godot_changes_prepare": "Change Set Preview", "godot_changes_apply": "Coordinated File Editor", "godot_changes_rollback": "Change Set Rollback", "godot_changes_status": "Change Set Inspection", "asset_remove_background": "Image Background Removal", "asset_export": "3D Export", "asset_import": "Asset Import", "blender_run": "Blender", "godot_read_file": "File Reader", "godot_read_range": "Code Reader", "godot_write_file": "File Writer", "godot_apply_patch": "Code Editor", "godot_script_diagnostics": "Script Diagnostics", "godot_project_map": "Project Map", "godot_diagnostics": "Project Diagnostics", "godot_debugger": "Debugger Inspection", "godot_panels": "Panel Inventory", "godot_panel_read": "Panel Reader", "godot_panel_data": "Native Panel Reader", "task_check": "Acceptance Check", "godot_save_scene": "Scene Save", "store_search": "Asset Store Search", "store_install": "Plugin Installer", "storage_search": "Storage Search", "file_observe": "File Inspection", "task_update": "Plan Update", "plan_ask": "Plan Questions", "tool_search": "Tool Search", "tool_describe": "Tool Inspection", "playtest_act": "Playtest", "playtest_watch": "Playtest Monitor", "playtest_state": "Game Inspection"}
+	var names = {"ziva_task": "Ziva Delegation", "ziva_task_poll": "Ziva Delegation · Waiting", "ziva_task_result": "Ziva Answer Reader", "godot_changes_prepare": "Change Set Preview", "godot_changes_apply": "Coordinated File Editor", "godot_changes_rollback": "Change Set Rollback", "godot_changes_status": "Change Set Inspection", "asset_remove_background": "Image Background Removal", "asset_export": "3D Export", "asset_import": "Asset Import", "blender_status": "Blender Status", "blender_prepare": "Blender Package Preparation", "blender_run": "Blender", "godot_read_file": "File Reader", "godot_read_range": "Code Reader", "godot_write_file": "File Writer", "godot_apply_patch": "Code Editor", "godot_script_diagnostics": "Script Diagnostics", "godot_project_map": "Project Map", "godot_diagnostics": "Project Diagnostics", "godot_debugger": "Debugger Inspection", "godot_panels": "Panel Inventory", "godot_panel_read": "Panel Reader", "godot_panel_data": "Native Panel Reader", "task_check": "Acceptance Check", "godot_save_scene": "Scene Save", "store_search": "Asset Store Search", "store_install": "Plugin Installer", "storage_search": "Storage Search", "file_observe": "File Inspection", "task_update": "Plan Update", "plan_ask": "Plan Questions", "tool_search": "Tool Search", "tool_describe": "Tool Inspection", "playtest_act": "Playtest", "playtest_watch": "Playtest Monitor", "playtest_state": "Game Inspection"}
 	return "Running " + str(names.get(name, name.replace("_", " ").capitalize())) + " Tool"
 
 func _tool_status(name: String) -> String:
 	if name == "asset_remove_background": return "Elimin fundalul imaginii…"
+	if name == "blender_prepare": return "Pregătesc Blender din pachetele APK…"
 	if name == "blender_run": return "Lucrez în Blender…"
 	if name == "ziva_task": return "Trimit sarcina agentului Ziva…"
 	if name == "ziva_task_poll": return "Aștept răspunsul Ziva…"
@@ -3414,7 +3471,10 @@ func _work_jobs_changed(parent: String) -> void:
 func _all_definitions() -> Array:
 	if project_manager_mode:
 		return _start_definitions()
-	return integrations.linux.definitions(bool(integration_settings.get("linux_enabled", false)) and integrations.linux.available()) + tools.definitions() + assets.definitions() + FileRegistry.definitions() + [_preview_definition()] + EditorControl.definitions() + Store.definitions() + _agent_definitions() + agent_jobs.play_definitions() + Workspace.definitions() + integrations.definitions(bool(integration_settings.get("github_enabled", false)) and github_has_token and Integrations.valid_repository(str(integration_settings.get("github_repository", ""))), bool(integration_settings.get("blender_enabled", false)), integrations.termux != null and integrations.termux.available())
+	var bundled_blender = integrations.bundled_blender()
+	var bundled_ready = integrations.bundled_blender_ready() if bundled_blender else false
+	var blender_enabled = bool(integration_settings.get("blender_enabled", false)) or bundled_blender
+	return integrations.linux.definitions(bool(integration_settings.get("linux_enabled", false)) and integrations.linux.available()) + tools.definitions() + assets.definitions() + FileRegistry.definitions() + [_preview_definition()] + EditorControl.definitions() + Store.definitions() + _agent_definitions() + agent_jobs.play_definitions() + Workspace.definitions() + integrations.definitions(bool(integration_settings.get("github_enabled", false)) and github_has_token and Integrations.valid_repository(str(integration_settings.get("github_repository", ""))), blender_enabled, integrations.termux != null and integrations.termux.available(), bundled_blender, bundled_ready)
 
 # The app-owned Agent AI harness runs native file/shell tools
 # directly in PRoot, while app editor, playtest, capture, change-set, asset,
@@ -3579,8 +3639,10 @@ func _execute_call(name: String, args: Dictionary, external: bool = false) -> Di
 		_record_event("linux_project_changes", {}, observed)
 		_update_changes()
 	elif name == "linux_install_tool": result = await integrations.linux.setup("tool_install", str(args["tool"]))
+	elif name == "blender_status": result = integrations.linux.blender_status()
+	elif name == "blender_prepare": result = await integrations.linux.install_blender(cancel)
 	elif name == "blender_run":
-		if not integration_settings.get("blender_enabled", false): result = Common.failure("Blender este dezactivat în acest proiect.", "permission_denied")
+		if not integration_settings.get("blender_enabled", false) and not integrations.bundled_blender(): result = Common.failure("Blender este dezactivat în acest proiect.", "permission_denied")
 		else:
 			result = await integrations.blender(str(integration_settings.get("blender_path", "")), args, cancel)
 			if result.get("ok", false): _register_blender_outputs(result)
@@ -6549,7 +6611,7 @@ func _build_linux_runtime(parent: Node) -> void:
 	form["tools"] = VBoxContainer.new()
 	card.add_child(form["tools"])
 	form["buttons"] = {}
-	for entry in [["python", "Python"], ["node", "Node.js · npm"], ["git", "Git"], ["ripgrep", "ripgrep"], ["blender", "Blender CLI"]]:
+	for entry in [["python", "Python"], ["node", "Node.js · npm"], ["git", "Git"], ["ripgrep", "ripgrep"]]:
 		var row = HBoxContainer.new()
 		form["tools"].add_child(row)
 		var label = _label(row, entry[1])

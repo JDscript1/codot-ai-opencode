@@ -112,6 +112,68 @@ Jurnal: 3.11.2026 — AG-90, direcția mutată pe suită completă; identitate A
 AI, acces Godot complet și control Ziva în surse, Blender urmează să fie
 integrat direct în APK. Termux rămâne neatins până la finalul migrării.
 
+## AG-91 — Blender bundled, backend app-native și probă offline — 3.11.2026
+
+**Cerință.** Blender CLI trebuie să fie în APK, să ruleze prin runtime-ul
+aplicației, să fie controlabil de Agent AI prin harness-ul nativ și să nu
+depindă de Termux sau de o descărcare ulterioară. La final, Termux se curăță
+numai după ce funcțiile echivalente sunt verificate.
+
+**Implementat în surse.**
+
+- `blender` 4.3.2+dfsg-2 și dependențele Debian sunt în repository-ul offline
+  semnat în APK. Am adăugat explicit `python3-numpy`, `python3-requests` și
+  `python3-pil`; fără numpy, exportul GLTF eșua deși randarea funcționa.
+- `AILinuxRuntimeFiles.blenderStatus()` probează binarul real, iar
+  `blenderRun()` execută un script din proiect cu
+  `--background --factory-startup --disable-autoexec`, `/workspace` montat,
+  `GODOT_AI_OUTPUT_DIR`, `GODOT_AI_INPUTS`, `TMPDIR=/tmp` și directoare Blender
+  izolate în `/tmp`.
+- Căile scriptului, `.blend`, intrărilor și ieșirilor sunt relative, validate
+  și canonicalizate în proiect. Rezultatul include exit code, output, căile
+  fișierelor noi/modificate și starea backend-ului.
+- `AILinuxRuntime` are acțiunile `blender_status` și `blender_run`;
+  `LinuxRuntime` expune `blender_status`, `blender`, `install_blender`;
+  `Integrations` expune `blender_status`, `blender_prepare`, `blender_run`.
+- Panoul Integrări afișează un card Blender bundled cu **Pregătește din APK**
+  și **Verifică Blender**. Nu mai afișează Blender ca utilitar de descărcat în
+  Runtime Linux. Promptul Agent AI și SYSTEM.md descriu backend-ul bundled.
+- `PATH`-ul PRoot include acum `/usr/sbin` și `/sbin`; fără ele, `dpkg` nu putea
+  găsi `ldconfig`/`start-stop-daemon`. Am adăugat și oferta de surse GPL pentru
+  Blender în assets și în documentație.
+
+**Pachet offline măsurat.** Buildul standard selectează **377 pachete**.
+`debian-offline.zip` are **291.488.170 bytes**, SHA-256
+`6d3cbf835dfbab58e6a9f1b9add122995a473d9346fec8cfdaea96c4da1598ce`. Instalarea
+adaugă aproximativ **800 MB**; sunt necesari cel puțin 2,5 GB liberi.
+
+**Probă locală reală.**
+
+- repository-ul a fost montat ca sursă APT `file:` și instalat în Debian ARM64
+  prin PRoot, cu `--no-install-recommends`; apt a raportat `Need to get 0 B`,
+  deci fără rețea;
+- `blender --background --factory-startup --version` → `Blender 4.3.2`;
+- randare **Cycles CPU**, 8 samples, PNG RGBA 64×64 valid;
+- export `probe.glb` (1.972 bytes, magic `glTF`) și `probe.blend` (441.664
+  bytes);
+- import real în Godot 4.7.2 ARM64 headless:
+  `GODOT_GLB_IMPORT_OK meshes=1`;
+- avertismentul Draco este cunoscut; GLB-ul de probă este necomprimat.
+
+**Teste statice și editor.**
+
+- Godot real: **1.040 assertions, 0 failures**; noul test verifică definițiile
+  bundled `blender_status`/`blender_prepare` înainte de instalare și
+  `blender_run` numai după readiness;
+- Python: **52 teste** în `modules/ai_assistant/tests`, inclusiv testele
+  Blender bundled și Termux legacy; **12 teste** pentru runtime-ul încorporat;
+- `gdparse` și `git diff --check` au trecut.
+
+**Neefectuat.** Buildul APK pentru AG-91, instalarea pe telefon, controlul live
+prin Agent AI/Pi, randarea Eevee/GPU, testarea AAA și curățarea Termux.
+Download-ul nu a fost încă înlocuit; APK-urile vechi rămân până la un build nou
+verificat. Termux rămâne neatins.
+
 ## AG-89 — pachete runtime incluse în APK și actualizare offline — 3.11.2026
 
 **Cerință.** Mediul minim să fie pregătit în APK, să nu mai fie descărcat la

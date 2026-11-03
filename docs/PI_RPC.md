@@ -28,8 +28,9 @@ Runtime-ul folosește versiunile fixate:
 Instalarea este în filesystem-ul Debian deținut de aplicație. Node.js este
 instalat cu lifecycle scripts pentru binarul ARM64; Pi este instalat cu
 `--ignore-scripts`, fiind un bundle JavaScript revizuit. Sunt necesare
-Android 10+, ARM64 și aproximativ 900 MB liberi. Instalarea este anulată, iar
-ecranul rămâne aprins până la finalizare.
+Android 10+, ARM64 și aproximativ 3 GB liberi atunci când pachetele Debian
+includ și suita Blender. Instalarea este anulată, iar ecranul rămâne aprins
+până la finalizare.
 
 ## Autentificare și rutare
 

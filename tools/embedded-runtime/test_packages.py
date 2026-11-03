@@ -96,6 +96,10 @@ class PackageLockTests(unittest.TestCase):
             lock["ziva"]["runtime"]["sha256"], "f485f3b0f381fe4ec40b10788f0af62bea487c94ec6d830ec811c09f24f32b39"
         )
         self.assertIn("xz-utils", lock["debian"]["packages"])
+        self.assertIn("blender", lock["debian"]["packages"])
+        self.assertIn("python3-numpy", lock["debian"]["packages"])
+        self.assertIn("python3-requests", lock["debian"]["packages"])
+        self.assertIn("python3-pil", lock["debian"]["packages"])
 
 
 if __name__ == "__main__":

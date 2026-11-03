@@ -20,7 +20,10 @@ func _init(node: Node = null, native_bridge: Node = null) -> void:
 
 func _request(action: String, args: Dictionary = {}) -> Dictionary:
 	if bridge == null or not bridge.has_method("linux_runtime_request"): return Common.failure("Acest editor nu include runtime-ul Linux integrat.", "runtime_unavailable")
-	var result: Variant = bridge.call("linux_runtime_request", action, args)
+	var payload = args.duplicate(true)
+	if action in ["execute", "blender_run"] and not payload.has("project_directory"):
+		payload["project_directory"] = ProjectSettings.globalize_path("res://").trim_suffix("/")
+	var result: Variant = bridge.call("linux_runtime_request", action, payload)
 	return result if result is Dictionary else Common.failure("Răspuns Linux invalid.", "runtime_protocol_error")
 
 func refresh() -> Dictionary:
@@ -40,7 +43,7 @@ static func definitions(ready: bool) -> Array:
 	var result = [Common.tool("linux_status", "Inspect the built-in Linux runtime and verified Python, Node.js, Git, ripgrep or Blender utilities. The base prepares automatically; no separate Termux app is required. Availability is measured; do not assume a CLI harness is installed or integrated.", {}, [])]
 	if ready:
 		result.append(Common.tool("linux_execute", "Execute a shell command in the app-owned Debian runtime with the current Godot project mounted at /workspace. Use explicit paths; output is bounded, jobs are cancellable and return the actual exit code. This can modify project files and use network access. PRoot is not a security sandbox. Never read or print credentials; never claim a CLI agent integration merely because its executable runs. Use native Godot tools for scene operations and GLB previews.", {"command": {"type": "string", "minLength": 1, "maxLength": 16000}, "seconds": {"type": "integer", "minimum": 1, "maximum": 600}}, ["command"], "external"))
-		result.append(Common.tool("linux_install_tool", "Install an optional utility into the integrated Linux runtime. Only use when the user requested that utility; package downloads need network access. Confirm availability from the completed job, not from a queued installation.", {"tool": {"type": "string", "enum": ["python", "node", "git", "ripgrep", "blender"]}}, ["tool"], "external"))
+		result.append(Common.tool("linux_install_tool", "Install an optional utility into the integrated Linux runtime. Only use when the user requested that utility; package downloads need network access. Blender is bundled by the application and is prepared through blender_prepare, not this tool. Confirm availability from the completed job, not from a queued installation.", {"tool": {"type": "string", "enum": ["python", "node", "git", "ripgrep"]}}, ["tool"], "external"))
 	return result
 
 func setup(action: String, tool: String = "") -> Dictionary:
@@ -56,6 +59,19 @@ func ensure_ready() -> Dictionary:
 func execute(args: Dictionary, cancel: Dictionary) -> Dictionary:
 	if not available(): return Common.failure("Linux se pregătește automat. Verifică starea în Integrări → Runtime Linux.", "runtime_unavailable")
 	return await _start("execute", args, cancel)
+
+func blender_status() -> Dictionary:
+	return _request("blender_status")
+
+func blender(args: Dictionary, cancel: Dictionary) -> Dictionary:
+	if not available(): return Common.failure("Runtime-ul Linux nu este pregătit pentru Blender.", "runtime_unavailable")
+	var status = blender_status()
+	if not status.get("ready", false): return Common.failure(str(status.get("error", "Blender nu este pregătit.")), str(status.get("reason", "blender_unavailable")))
+	return await _start("blender_run", args, cancel)
+
+func install_blender(cancel: Dictionary) -> Dictionary:
+	if working: return Common.failure("O sarcină Linux este deja în lucru.", "runtime_busy")
+	return await _start("packages_update", {}, cancel)
 
 func resume(id: String) -> Dictionary:
 	if working: return Common.failure("O sarcină Linux este deja în lucru.", "runtime_busy")
@@ -79,7 +95,10 @@ func _wait(id: String, cancel: Dictionary) -> Dictionary:
 	active_job = id
 	stopping = false
 	changed.emit()
-	var deadline = Time.get_ticks_msec() + 1800000
+	# Package preparation includes decompression and dpkg for the bundled
+	# Blender/Godot suites. Native jobs still have their own exact timeouts;
+	# this bounded wait only prevents the UI from abandoning a live job.
+	var deadline = Time.get_ticks_msec() + 7200000
 	var outcome = Common.failure("Sarcina Linux nu a întors un rezultat. Verifică jurnalul înainte de reluare.", "runtime_job_unknown")
 	while Time.get_ticks_msec() < deadline:
 		if (stopping or cancel.get("cancelled", false)) and not stopping:
