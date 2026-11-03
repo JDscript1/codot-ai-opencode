@@ -637,8 +637,9 @@ func _build_settings() -> void:
 	account_service.item_selected.connect(func(_index: int) -> void: _select_account_service())
 	chatgpt_section = VBoxContainer.new()
 	account_tab.add_child(chatgpt_section)
-	_label(chatgpt_section, "ChatGPT se conectează direct în browser, cu contul tău.")
+	_label(chatgpt_section, "ChatGPT se conectează direct în browser, cu contul tău. Pentru cota ChatGPT este nevoie de un plan eligibil (Plus/Pro). Dacă OpenAI rămâne în spinner, încearcă Incognito, fără adblock/VPN.")
 	_button(chatgpt_section, "Conectează ChatGPT", _login_chatgpt)
+	_button(chatgpt_section, "Reînregistrează ChatGPT", _reset_chatgpt)
 	companion_section = VBoxContainer.new()
 	account_tab.add_child(companion_section)
 	_label(companion_section, "Acest serviciu folosește companionul personal de pe calculatorul sau serverul tău.")
@@ -3718,10 +3719,16 @@ func _login_chatgpt() -> void:
 	busy = true
 	send_button.disabled = true
 	var profile = {"id": Common.uid(), "host_id": "urn:uuid:" + Common.uid(), "kind": "siwc", "url": Accounts.RESOURCE, "name": "ChatGPT", "models": []}
+	var existing := false
 	for saved in config["providers"]:
 		if saved.get("kind") == "siwc":
 			profile = saved.duplicate(true)
+			existing = true
 			break
+	if not existing:
+		# Persist the installation host and the issued client ID before the
+		# one-time code exchange, as required by the SIWC registration flow.
+		_upsert("providers", profile)
 	cancel = {"cancelled": false}
 	var result = await accounts.login_chatgpt(profile, cancel, _status)
 	busy = false
@@ -3737,6 +3744,19 @@ func _login_chatgpt() -> void:
 		_upsert("providers", profile)
 	_status("ChatGPT conectat." if catalog.get("ok", false) else "ChatGPT conectat; catalogul modelelor necesită reîncercare.")
 	await _refresh_accounts()
+
+func _reset_chatgpt() -> void:
+	if busy: return
+	var removed := false
+	for index in range(config["providers"].size() - 1, -1, -1):
+		var saved: Dictionary = config["providers"][index]
+		if saved.get("kind") != "siwc": continue
+		vault.erase(str(saved.get("id", "")))
+		config["providers"].remove_at(index)
+		removed = true
+	if removed: _save_config()
+	_status("Înregistrarea ChatGPT a fost ștearsă. Pornesc o conectare nouă…")
+	await _login_chatgpt()
 
 func _save_companion() -> void:
 	var form: Dictionary = forms["companion"]
