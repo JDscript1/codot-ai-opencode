@@ -61,6 +61,11 @@ quiet-level = 3
 builtin = ["clear", "rare", "en-GB_to_en-US"]
 skip = [
 	".mailmap",
+	"PROGRES_SI_PLAN.md",
+	"docs/*",
+	"modules/ai_assistant/*",
+	"platform/android/java/editor/src/main/java/org/godotengine/editor/*",
+	"tools/embedded-runtime/*",
 	"*.desktop",
 	"*.gitignore",
 	"*.po",

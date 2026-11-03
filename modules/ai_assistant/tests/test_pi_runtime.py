@@ -1,6 +1,7 @@
 """Static guards for the app-owned Pi runtime and Android wiring."""
-from pathlib import Path
+
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 PI = ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIPiRuntime.kt"
@@ -22,7 +23,7 @@ class PiRuntimeTests(unittest.TestCase):
         self.assertIn('.put("exposure", "direct")', self.source)
         self.assertIn('.put("timeout", 3600)', self.source)
         self.assertIn('provider.put("apiKey", piLiteral(key.ifEmpty { "pi-local" }))', self.source)
-        self.assertIn('if (character == \'$\' || character == \'!\') output.append(\'$\')', self.source)
+        self.assertIn("if (character == '$' || character == '!') output.append('$')", self.source)
         self.assertIn('.put("headers", JSONObject().put("Authorization", "Bearer $token"))', self.source)
 
     def test_native_tools_and_read_only_toolset_are_explicit(self):
@@ -34,7 +35,7 @@ class PiRuntimeTests(unittest.TestCase):
         panel = PANEL.read_text()
         self.assertIn("var result: Dictionary = await _execute_call(name, args)", panel)
         self.assertNotIn("await _execute_call(name, args, true)", panel)
-        self.assertIn("if result.get(\"ok\", false): _track_verification(name)", panel)
+        self.assertIn('if result.get("ok", false): _track_verification(name)', panel)
 
     def test_legacy_opencode_surface_is_absent(self):
         for relative in [
