@@ -176,10 +176,13 @@ for API-key and local profiles. Pi is installed privately inside the existing
 Debian/PRoot runtime and is controlled through JSONL RPC. Its native `read`,
 `bash`, `edit`, `write`, `grep`, `find`, and `ls` tools run directly in PRoot.
 The complete Godot tool catalog is exposed through a loopback MCP server with
-the `search`, `describe`, and `call` meta-tools, declared as `direct` exposure.
-The AI Assistant panel owns streaming, history, approvals, and edit cards; there
-is no Pi tab or terminal. Profiles are rebuilt each turn so changed keys, models,
-and endpoints cannot reuse stale Pi configuration.
+`deferred` exposure. Pi discovers tools with its native `tool_search`, calls
+them directly, and owns the session, context compaction, and memory. Stable app
+instructions live in Pi's `APPEND_SYSTEM.md`; the per-turn prompt contains only
+the mode, selected files/references/images, and the user request. The AI
+Assistant panel owns streaming, UI history, approvals, and edit cards; there is
+no Pi tab or terminal. The Pi process is kept alive across turns and restarted
+only when the conversation, provider, model, mode, or credential set changes.
 
 Plan and Ask remain read-only. Auto and Default receive the full Pi tool set;
 application MCP writes retain the existing Plan/Auto checks and native approval

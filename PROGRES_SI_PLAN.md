@@ -8,6 +8,45 @@ etapă importantă: implementare, verificare, compilare sau livrare. „Implemen
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
 
+## AG-87 — Pi deține uneltele, sesiunea și contextul — 3.11.2026
+
+**Cerință.** Harness-ul Pi trebuie folosit nativ pentru unelte, context, memorie
+și compactare; aplicația noastră trebuie să rămână puntea către Godot și UI-ul,
+nu să reimplementeze bucla agentului.
+
+**Implementat în surse.** Catalogul Godot este expus integral ca unelte MCP
+native, cu `"exposure": "deferred"`. Pi pornește cu `tool_search` activ și
+descoperă singur schema relevantă; wrapper-ul propriu `search`/`describe`/`call`
+nu mai este expus. În Plan/Ask, serverul publică numai unelte read-only.
+
+- Procesul Pi este păstrat viu între tururi pentru aceeași conversație,
+  provider, model, mod și configurație de chei. `pi_status` expune ruta activă,
+  iar schimbarea oricărui element oprește și repornește sesiunea cu
+  `--session-id`.
+- Promptul per tur a fost redus la modul de lucru, modelul selectat, maparea
+  `/workspace`, fișierele/referințele active, imagini și cererea utilizatorului.
+  Rezumatul de compactare al aplicației, planul intern și `AGENT.md` nu mai sunt
+  injectate în fiecare tur.
+- Instrucțiunile stabile sunt scrise în
+  `/root/.pi/agent/APPEND_SYSTEM.md`; compactarea automată este configurată în
+  `settings.json` și aparține Pi. Aplicația nu mai pornește compactarea proprie
+  în tururile gestionate de Pi.
+- Comanda manuală `/compact` trimite `{"type":"compact"}` la procesul Pi atunci
+  când ruta curentă este aceeași; altfel rămâne fallback-ul nativ.
+- Numele reale ale uneltelor MCP sunt normalizate în istoric și jurnal, iar
+  rezultatele și imaginile păstrează fluxul existent de aprobare și audit.
+
+**Verificat local.** `gdparse` pe scripturile runtime și testul Godot;
+`test_pi_runtime.py` 7/7; `py_compile`; `git diff --check`. Testele runtime au
+trecut pe ambele distribuții în CI înainte de pasul de randare, iar build-urile
+Android sunt în curs la momentul acestei însemnări.
+
+**Neefectuat încă.** Proba live cu un furnizor real, instalarea pe dispozitiv și
+validarea vizuală Android. Conversațiile bifurcate/importate pornesc o sesiune
+Pi nouă; istoricul aplicației rămâne în UI, dar nu este migrat automat în
+sesiunea Pi. Fișierele `AGENTS.md`/`CLAUDE.md` sunt descoperite nativ, iar
+`AGENT.md` este citit de Pi prin instrucțiunile de proiect.
+
 ## AG-86 — Meta Model API și Muse Spark ca furnizor de coding — 3.11.2026
 
 **Cerință.** Aplicația trebuie să ofere Meta ca furnizor AI separat, cu cheie API,

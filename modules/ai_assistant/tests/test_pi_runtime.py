@@ -31,6 +31,7 @@ class PiRuntimeTests(unittest.TestCase):
         self.assertNotIn('.put("exposure", "direct")', self.source)
         self.assertIn('"tool_search"', self.source)
         self.assertIn("APPEND_SYSTEM.md", self.source)
+        self.assertIn('"compact"', self.source)
         mcp = MCP.read_text()
         self.assertIn('panel.call("agent_catalog")', mcp)
         self.assertIn('panel.call("agent_execute", tool, arguments)', mcp)

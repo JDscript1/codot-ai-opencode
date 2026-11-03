@@ -5180,7 +5180,24 @@ func _resume_after_stop() -> void:
 	_run_next()
 
 func _compact() -> void:
+	if pi_session != null and _pi_running_for_current():
+		var result: Dictionary = pi_session.send({"type": "compact"})
+		if result.get("ok", false):
+			_status("Pi compactează contextul…")
+			return
 	_start_compaction("manual")
+
+func _pi_running_for_current() -> bool:
+	if project_manager_mode or pi_session == null: return false
+	var profile := _current_profile()
+	var model := str(model_picker.get_item_metadata(model_picker.selected)) if model_picker.selected >= 0 else ""
+	if profile.is_empty() or model.is_empty(): return false
+	pi_session.build_profiles(config["providers"], vault)
+	var target: Dictionary = pi_session.target(str(profile.get("id", "")), model)
+	if target.is_empty(): return false
+	var mode_name := "read_only" if _pi_read_only() else "agent"
+	var session_id := str(conversations.index.get("active", "app"))
+	return _pi_can_reuse_session(pi_session.refresh(), target, mode_name, session_id, pi_session.signature())
 
 func _auto_compact_enabled() -> bool:
 	return bool(config.get("preferences", {}).get("auto_compact", true))

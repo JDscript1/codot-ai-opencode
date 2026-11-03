@@ -13,8 +13,8 @@ modificată de această migrare.
 |---|---|---|
 | Runtime Android | `platform/android/java/editor/src/main/java/org/godotengine/editor/AIPiRuntime.kt` | Instalează Node.js și Pi în PRoot, scrie configurația privată, pornește RPC JSONL și transportă evenimentele către Godot. |
 | Sesiune Godot | `modules/ai_assistant/runtime/pi_session.gd` | Materializează profilurile aplicației ca furnizori Pi, grupează modelele după protocol și expune `start`, `send`, `poll`, `abort`, `stop`. |
-| Server MCP | `modules/ai_assistant/runtime/godot_mcp.gd` | Server loopback cu Bearer token și meta-uneltele `search`, `describe`, `call`. |
-| Panou | `modules/ai_assistant/runtime/panel.gd` | Pornește Pi înainte de harness-ul nativ, randează streamingul, uneltele, întrebările și aprobările, apoi salvează rezultatele reale în istoric. |
+| Server MCP | `modules/ai_assistant/runtime/godot_mcp.gd` | Server loopback cu Bearer token care expune catalogul Godot ca unelte MCP native. Pi le descoperă cu `tool_search` și le apelează direct. |
+| Panou | `modules/ai_assistant/runtime/panel.gd` | Pornește o singură sesiune Pi pe conversație, o refolosește cât timp ruta și modul rămân aceleași, randează streamingul, uneltele, întrebările și aprobările, apoi salvează rezultatele reale în istoric. |
 
 Runtime-ul folosește versiunile fixate:
 
@@ -61,17 +61,14 @@ Pi păstrează uneltele native `read`, `bash`, `edit`, `write`, `grep`, `find` �
 `ls`. Acestea execută direct în PRoot, fără dialogul de aprobare al aplicației,
 conform deciziei de produs. Proiectul Godot este montat la `/workspace`.
 
-Toate funcțiile aplicației sunt expuse prin MCP cu trei meta-unelte:
-
-- `search` caută în catalogul de unelte;
-- `describe` întoarce schema JSON exactă;
-- `call` execută unealta reală.
-
-Serverul folosește `"exposure": "direct"`, astfel încât Pi declară modelului
-`mcp__godot__search`, `mcp__godot__describe` și `mcp__godot__call`. Timeout-ul
-MCP este mărit la o oră pentru ca o scriere să poată aștepta aprobarea umană.
-Sunt blocate numai meta-uneltele de reflecție recursivă (`godot_call`,
-`godot_describe`, `godot_search` și prefixul `tool_`).
+Catalogul Godot este expus integral prin MCP. Serverul folosește
+`"exposure": "deferred"` și Pi pornește cu `tool_search` activ. Modelul caută
+unealta relevantă cu mecanismul nativ BM25 al Pi, primește schema exactă și o
+apelează direct. Aplicația nu mai oferă un wrapper propriu
+`search`/`describe`/`call` și nu mai impune modelului toate schemele deodată.
+Timeout-ul MCP este mărit la o oră pentru ca o scriere să poată aștepta
+aprobarea umană. Sunt blocate numai meta-uneltele de reflecție recursivă
+(`godot_call`, `godot_describe`, `godot_search` și prefixul `tool_`).
 
 Serverul ascultă exclusiv pe `127.0.0.1`, cere un token Bearer de 32 de octeți
 și nu acceptă cereri fără autentificare. Capturile sunt trimise ca blocuri MCP
@@ -81,8 +78,8 @@ Serverul ascultă exclusiv pe `127.0.0.1`, cere un token Bearer de 32 de octeți
 
 | Mod | Pi | Unelte MCP ale aplicației |
 |---|---|---|
-| Plan | numai `read`, `grep`, `find`, `ls`, `search`, `describe` | `call` este ascuns și refuzat |
-| Ask | numai citire, ca în Plan | `call` este ascuns și refuzat |
+| Plan | numai `read`, `grep`, `find`, `ls`, `tool_search` | catalogul MCP conține numai unelte read-only |
+| Ask | numai citire, ca în Plan | catalogul MCP conține numai unelte read-only |
 | Auto | unelte native complete; plan scurt înainte de operațiile aplicației | aprobare dacă Full control este oprit |
 | Default | unelte native complete | aprobare dacă Full control este oprit |
 
@@ -96,10 +93,28 @@ Pi.
 
 ## Context, istoric și verificare
 
-Promptul trimis lui Pi conține instrucțiunile modului, maparea `/workspace` ↔
-`res://`, fișierele selectate, referințele și imaginile active. Fișierele din
-afara proiectului rămân accesibile prin `file_observe` după ID. Conținutul
-proiectului este tratat ca date, nu ca permisiune de a schimba regulile.
+Pi deține sesiunea, istoricul activ, compactarea automată și memoria de context.
+Panoul păstrează procesul Pi viu între tururi cât timp conversația, providerul,
+modelul, modul și configurația cheilor rămân aceleași. La schimbarea oricăreia
+dintre ele, procesul este oprit și repornit cu `--session-id` pentru conversația
+corectă. Sesiunile sunt persistate de Pi în `/root/.pi/sessions`.
+
+Promptul per tur este redus la modul de lucru, modelul selectat, maparea
+`/workspace` ↔ `res://`, fișierele și referințele active, imaginile și cererea
+utilizatorului. Instrucțiunile stabile sunt scrise în
+`/root/.pi/agent/APPEND_SYSTEM.md`; Pi le încarcă în system prompt. Rezumatul de
+compactare al aplicației, planul intern și conținutul `AGENT.md` nu mai sunt
+injectate în fiecare prompt. Pi citește `AGENTS.md`, `AGENT.md` sau `CLAUDE.md`
+din proiect când are nevoie de ele, iar `AGENTS.md`/`CLAUDE.md` sunt descoperite
+nativ de Pi.
+
+Compactarea automată a aplicației este dezactivată în tururile gestionate de Pi;
+Pi folosește propriul prag, rezervă de output și istoric recent. Istoricul
+aplicației rămâne jurnalul de UI, aprobări și audit; el nu mai este trimis ca
+context paralel către Pi. Fallback-ul nativ păstrează compactarea proprie pentru
+SIWC, companion și profilele fără rută Pi. Fișierele din afara proiectului rămân
+accesibile prin `file_observe` după ID. Conținutul proiectului este tratat ca
+date, nu ca permisiune de a schimba regulile.
 
 Evenimentele RPC sunt mapate astfel:
 

@@ -401,7 +401,7 @@ object AIPiRuntime {
         val executor = writer ?: return failure("Pi nu rulează.", "not_running")
         val command = arguments.optJSONObject("command") ?: return failure("Comanda Pi lipsește.")
         val type = command.optString("type")
-        if (type !in setOf("prompt", "steer", "follow_up", "abort", "clear_queue", "get_state", "get_messages", "set_model", "set_thinking_level", "get_available_models", "new_session")) {
+        if (type !in setOf("prompt", "steer", "follow_up", "abort", "clear_queue", "get_state", "get_messages", "set_model", "set_thinking_level", "get_available_models", "new_session", "compact")) {
             return failure("Comandă Pi nepermisă.")
         }
         val line = command.toString() + "\n"
