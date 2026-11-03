@@ -35,31 +35,36 @@ cheie `LLM_`. Sunt acceptate atât cheia brută `LLM_…`, cât și etichetele
 
 **Verificat local.** `gdparse` a trecut pe `providers.gd`, `icons.gd`,
 `chat_view.gd` și `test_runtime.gd`; `py_compile` a trecut pe fixture-ul HTTP.
+`test_pi_runtime.py` a trecut 5/5; `clang-format --dry-run --Werror`,
+`file_format`, `copyright_headers` și `validate_includes` au trecut pe cele două
+fișiere C++ modificate pentru eliminarea avertismentelor de umbrire.
 Testele adaugă detecția cheii, URL-ul oficial, filtrarea catalogului, limitele,
 capabilitățile, nivelurile de reasoning, tarifele și pictograma.
 
 **Verificat în CI și în APK.** Ambele workflow-uri au trecut integral:
-[41633357473](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41633357473)
+[41635722042](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41635722042)
 pentru instalatorul standard și
-[41633369836](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41633369836)
+[41635723455](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41635723455)
 pentru Ziva. Joburile `runtime`, `native-editor` și `android` au încheiat cu
-succes. Artefactele sunt `13229427568` și `13230170683`, ambele din sursa
-`a7fb12d30d228b971c35d186abefc0f52720bb49`.
+succes. Artefactele sunt `13231385322` și `13231610038`, ambele din sursa
+`1c81ec403819dd8c29be40d09c8267559fb964a5`. Commitul următor,
+`0f9555e01cda40b8f9adffdfd3ae8087f2d76f2d`, adaugă numai header-ul de licență
+cerut de verificarea statică pentru `ai_runtime_bridge.cpp`.
 
-- APK standard: 112.628.702 bytes, SHA-256
-  `9a7147f1a485a1acdb57aae29f5fa180930f476b862e7bab756073a4b327b0c1`,
-  certificat debug `5321be67933ed6e040dddad3f4ff5ecbe0dc8bde1d9ebd6fbbb0a2b625292da5`.
-- APK Ziva: 112.630.790 bytes, SHA-256
-  `4e9b739a5a662780343e45ebf8ac7d82520171a844bd9426a3cc8f2966e4b157`,
-  certificat debug `d9d7fa4e4a0b632e405aef6f0e1d0e99813eedd0db3ac1f27a53786ca9596c88`.
+- APK standard: 112.628.770 bytes, SHA-256
+  `02a7abc8794e2090cc6be2e7766d00d651d30a617ebe4e7e13507d3ad97a3fa8`,
+  certificat debug `1051df4bf0927dc452adb432bf2ca2aa0ad423d33058040d04fd93cb585fc64f`.
+- APK Ziva: 112.629.610 bytes, SHA-256
+  `953b5c24dbd6c3340d2748b772049fa161f839868065b99b13bcb6260e3b1d96`,
+  certificat debug `0020f6fc120f27b16b71219a3780d9991f6d781e3f2bdb8b050cdd41cadc5efa`.
 - Ambele pachete au trecut verificarea ZIP, au numai ABI `arm64-v8a`, conțin
   manifestul runtime-ului încorporat și cele 46 de scripturi identice byte cu
   byte. Sunt prezente `AIPiRuntime`, textele `Meta Model API` și
   `muse-spark-1.3-contributor`; nu există `AIOpenCodeRuntime`, `libai_pty.so` sau
   active OpenCode.
 - Instalatoarele din `/storage/emulated/0/Download` au fost înlocuite atomic la
-  **3.11.2026, 13:22:57 CET**. Copiile vechi din `92b98d3819` sunt păstrate în
-  `~/godot-ai-artifacts/pi-meta-a7fb12d30d/previous/`; în Download rămân numai
+  **3.11.2026, 13:48:27 CET**. Copiile vechi din `a7fb12d30d` sunt păstrate în
+  `~/godot-ai-artifacts/pi-meta-1c81ec4038/previous/`; în Download rămân numai
   cele două instalatoare curente și checksum-urile lor.
 - `https://api.meta.ai/v1/status` a răspuns operațional, iar `GET /v1/models`
   fără cheie a răspuns HTTP 401, conform așteptărilor. Nu s-a făcut o cerere

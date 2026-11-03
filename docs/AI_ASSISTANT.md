@@ -49,11 +49,12 @@ opens the same global configuration window.
   [integrations](AI_INTEGRATIONS.md).
 - **AGENT.MD:** edit project memory in `AGENT.md`; existing `AGENTS.md` is preserved.
 
-The current installers are built from `a7fb12d30d` and include the Pi RPC
+The current installers are built from `1c81ec4038` and include the Pi RPC
 harness, Meta Model API (Muse Spark Standard and Contributor), control and
 integrations, [chat files, previews, editor control, Store and real
 diff](AI_CHAT_FILES_AND_EDITOR_CONTROL.md), activity drawer, 3D preview controls,
-image-purpose rules and optional Termux/Blender setup.
+image-purpose rules and optional Termux/Blender setup. The later `0f9555e01c`
+commit only adds the required license header to the native AI bridge.
 The Android Blender card has one install action, automatic verification and agent
 activation, then a compact **Blender Active** status and **Uninstall Blender**.
 Diagnostics and worker output are in Journal; package removal preserves containers
