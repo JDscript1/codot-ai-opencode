@@ -2110,14 +2110,10 @@ func _godot_mcp_tests() -> void:
 		"params": {"protocolVersion": "2025-11-25"}}, mcp.token))
 	check(initialized.begins_with("HTTP/1.1 200") and initialized.contains("\"protocolVersion\":\"2025-11-25\""), "MCP negotiates the V2 protocol revision")
 	var listed = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, mcp.token))
-	check(listed.contains("\"name\":\"search\"") and listed.contains("\"name\":\"describe\"") and listed.contains("\"name\":\"call\""), "MCP advertises the three meta-tools")
-	check(not listed.contains("godot_create_node"), "The full editor catalog stays out of MCP tools/list")
-	var searched = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
-		"params": {"name": "search", "arguments": {"query": "node", "limit": 3}}}, mcp.token))
-	check(bridge.searches == [["node", 3]] and searched.contains("godot_create_node"), "MCP search delegates to the editor catalog")
+	check(listed.contains("\"name\":\"godot_create_node\"") and not listed.contains("\"name\":\"search\""), "MCP advertises the Godot catalog as direct tools for Pi's native tool_search")
 	var captured = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
-		"params": {"name": "call", "arguments": {"name": "editor_capture", "arguments": {}}}}, mcp.token))
-	check(bridge.executions == [["editor_capture", {}]], "MCP call preserves tool names and arguments")
+		"params": {"name": "editor_capture", "arguments": {}}}, mcp.token))
+	check(bridge.executions == [["editor_capture", {}]], "MCP calls preserve direct Godot tool names and arguments")
 	check(captured.count("\"type\":\"image\"") == 1 and captured.count("aGVsbG8=") == 1, "Captures return one MCP image block, not duplicated base64 text")
 	var chunked_body = JSON.stringify({"jsonrpc": "2.0", "id": 5, "method": "ping"})
 	var parsed = mcp._parse_http(_mcp_chunked(chunked_body))
@@ -2129,6 +2125,8 @@ func _godot_mcp_tests() -> void:
 	check(panel._agent_mcp_exposed("agent_spawn") and panel._agent_mcp_exposed("linux_execute") and panel._agent_mcp_exposed("ziva_task") and panel._agent_mcp_exposed("editor_capture") and panel._agent_mcp_exposed("godot_create_node") and panel._agent_mcp_exposed("godot_changes_apply"), "Pi reaches the complete app tool catalog except reflection meta-tools")
 	var effective = panel._pi_effective_tool("mcp__godot__call", {"name": "godot_write_file", "arguments": {"path": "res://fixture.gd"}})
 	check(effective.get("name") == "godot_write_file" and effective.get("arguments", {}).get("path") == "res://fixture.gd", "Pi MCP meta-calls are normalized to the real app tool for logs and history")
+	var direct = panel._pi_effective_tool("mcp__godot__godot_write_file", {"path": "res://fixture.gd"})
+	check(direct.get("name") == "godot_write_file" and direct.get("arguments", {}).get("path") == "res://fixture.gd", "Direct MCP tool calls are normalized to the app tool name for logs and history")
 	var parsed_result = panel._pi_tool_result({"content": [{"type": "text", "text": "{\"ok\":true,\"result\":{\"path\":\"res://fixture.gd\"}}"}]}, false)
 	check(parsed_result.get("ok", false) and parsed_result.get("result", {}).get("path") == "res://fixture.gd", "Pi MCP text results retain the app's structured result instead of a nested transport payload")
 	var failed_result = panel._pi_tool_result({"content": [{"type": "text", "text": "{\"ok\":true}"}]}, true)
@@ -2138,8 +2136,8 @@ func _godot_mcp_tests() -> void:
 	panel.free()
 	mcp.read_only = true
 	var plan_tools = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 6, "method": "tools/list"}, mcp.token))
-	check(plan_tools.contains("\"name\":\"search\"") and plan_tools.contains("\"name\":\"describe\"") and not plan_tools.contains("\"name\":\"call\""), "Plan MCP exposes only read-only discovery")
-	var blocked = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "call", "arguments": {"name": "editor_capture", "arguments": {}}}}, mcp.token))
+	check(plan_tools.contains("\"name\":\"godot_project_map\"") and not plan_tools.contains("\"name\":\"godot_create_node\""), "Plan MCP exposes only read-only direct tools")
+	var blocked = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "godot_create_node", "arguments": {}}}, mcp.token))
 	check(blocked.contains("read-only"), "Plan MCP rejects calls")
 
 func _mcp_request(message: Dictionary, token: String) -> Dictionary:

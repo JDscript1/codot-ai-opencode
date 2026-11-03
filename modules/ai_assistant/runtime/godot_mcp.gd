@@ -2,8 +2,9 @@
 extends RefCounted
 ## Minimal MCP (Streamable HTTP, JSON responses) server for the Agent AI Pi session.
 ##
-## It exposes the Godot editor tool catalog through three meta-tools so the
-## agent can discover capabilities without loading every schema into context.
+## It exposes the Godot editor tool catalog as native MCP tools. Pi's own
+## tool_search/tool exposure decides what reaches the model, so the app does
+## not duplicate Pi's search, context or session loop.
 ## The listener is bound to loopback only and every request must carry the
 ## bearer token written into the guest Pi configuration.
 
@@ -12,8 +13,6 @@ const MAX_HEADER = 32 * 1024
 const MAX_BODY = 4 * 1024 * 1024
 const IDLE_MS = 30000
 const MAX_PEERS = 12
-const READ_TOOLS = ["search", "describe"]
-
 var panel: Node
 var store_path := ""
 var token := ""
@@ -162,77 +161,53 @@ func _handle(request: Dictionary) -> String:
 			return _http(200, id, _rpc_error(id, -32601, "Metodă MCP necunoscută: " + rpc), {})
 
 func _instructions() -> String:
-	return "Godot editor tools for this project. Use the search tool to find app tools, describe for the exact JSON schema, then call with name and arguments. Captures return image content. Change sets require prepare, status and apply. Every call is audited in the AI assistant journal; external side effects are never simulated."
+	return "Godot editor tools for this project. The catalog is registered as MCP tools; use Pi's tool_search to discover the ones relevant to the current task. Call a discovered tool directly with its declared arguments. Plan mode exposes only read tools. Captures return image content. Change sets require prepare, status and apply. Every call is audited in the AI assistant journal; external side effects are never simulated."
 
 func _tool_list() -> Array:
-	if read_only:
-		return [
-			{"name": "search", "description": "Search the Godot editor tool catalog by name or description. Plan mode is read-only; use this to inspect capabilities.", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 50}}, "required": ["query"], "additionalProperties": false}},
-			{"name": "describe", "description": "Return the exact schema for one Godot tool without executing it.", "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"], "additionalProperties": false}},
-		]
-	return [
-		{
-			"name": "search",
-			"description": "Search the Godot editor tool catalog by name or description. Returns up to 25 names with short descriptions. Start here instead of guessing tool names.",
-			"inputSchema": {
-				"type": "object",
-				"properties": {
-					"query": {"type": "string", "description": "Words to match in the tool name or description."},
-					"limit": {"type": "integer", "minimum": 1, "maximum": 50, "description": "Maximum results (default 20)."},
-				},
-				"required": ["query"],
-				"additionalProperties": false,
-			},
-		},
-		{
-			"name": "describe",
-			"description": "Return the full definition and JSON input schema for one Godot tool. Call this before call when the arguments are not obvious.",
-			"inputSchema": {
-				"type": "object",
-				"properties": {"name": {"type": "string", "description": "Exact tool name from search."}},
-				"required": ["name"],
-				"additionalProperties": false,
-			},
-		},
-		{
-			"name": "call",
-			"description": "Execute one Godot editor tool with validated arguments. Image captures are returned as MCP image content. Writes and playtests follow the editor's permissions.",
-			"inputSchema": {
-				"type": "object",
-				"properties": {
-					"name": {"type": "string", "description": "Exact tool name from search."},
-					"arguments": {"type": "object", "description": "Arguments matching the schema from godot_describe.", "additionalProperties": true},
-				},
-				"required": ["name"],
-				"additionalProperties": true,
-			},
-		},
-	]
+	var tools := []
+	if not is_instance_valid(panel) or not panel.has_method("agent_catalog"):
+		return tools
+	var catalog: Variant = panel.call("agent_catalog")
+	if not catalog is Array:
+		return tools
+	for item in catalog:
+		if not item is Dictionary:
+			continue
+		var name := str(item.get("name", ""))
+		if name.is_empty():
+			continue
+		var risk := str(item.get("risk", "external"))
+		if read_only and risk != "read":
+			continue
+		var schema: Variant = item.get("parameters", {})
+		if not schema is Dictionary:
+			schema = {"type": "object", "properties": {}, "additionalProperties": false}
+		tools.append({
+			"name": name,
+			"description": str(item.get("description", "")).left(2000),
+			"inputSchema": schema,
+		})
+	return tools
 
 func _call_tool(tool: String, raw_arguments: Variant) -> Dictionary:
 	var arguments: Dictionary = raw_arguments if raw_arguments is Dictionary else {}
-	if tool.begins_with("godot_"):
-		tool = tool.trim_prefix("godot_")
 	if not is_instance_valid(panel):
 		return _tool_result({"ok": false, "error": "Panoul AI Assistant nu este disponibil."}, [])
-	if read_only and tool == "call":
+	if not panel.has_method("agent_catalog") or not panel.has_method("agent_execute"):
+		return _tool_result({"ok": false, "error": "Catalogul Godot nu este disponibil."}, [])
+	var entry := {}
+	var catalog: Variant = panel.call("agent_catalog")
+	if catalog is Array:
+		for item in catalog:
+			if item is Dictionary and str(item.get("name", "")) == tool:
+				entry = item
+				break
+	if entry.is_empty():
+		return _tool_result({"ok": false, "error": "Instrument MCP necunoscut: " + tool}, [])
+	if read_only and str(entry.get("risk", "external")) != "read":
 		return _tool_result({"ok": false, "error": "Sesiunea Plan este read-only."}, [])
-	match tool:
-		"search":
-			var result: Dictionary = panel.call("agent_search", str(arguments.get("query", "")), int(arguments.get("limit", 20)))
-			return _tool_result(result, [])
-		"describe":
-			var result: Dictionary = panel.call("agent_describe", str(arguments.get("name", "")))
-			return _tool_result(result, [])
-		"call":
-			var name := str(arguments.get("name", ""))
-			var payload: Variant = arguments.get("arguments", {})
-			if name.is_empty():
-				return _tool_result({"ok": false, "error": "Numele instrumentului lipsește."}, [])
-			var result: Dictionary = await panel.call("agent_execute", name, payload if payload is Dictionary else {})
-			return _tool_result(result, _images(result))
-		_:
-			return _tool_result({"ok": false, "error": "Instrument MCP necunoscut: " + tool}, [])
+	var result: Dictionary = await panel.call("agent_execute", tool, arguments)
+	return _tool_result(result, _images(result))
 
 func _images(result: Dictionary) -> Array:
 	var images := []

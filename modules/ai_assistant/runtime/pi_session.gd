@@ -86,6 +86,9 @@ func installed() -> bool:
 func target(profile_id: String, model_id: String) -> Dictionary:
 	return targets.get(profile_id + "|" + model_id, {}).duplicate(true)
 
+func signature() -> String:
+	return JSON.stringify(providers).sha256_text()
+
 func build_profiles(app_profiles: Array, vault: RefCounted) -> Array:
 	providers = []
 	targets = {}
