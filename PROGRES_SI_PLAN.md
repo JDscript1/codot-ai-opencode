@@ -113,16 +113,47 @@ repository. Ambele seturi au fost generate local: `debian-offline.zip` are
 - Node din arhiva APK a răspuns `v22.19.0`; Pi a răspuns `1.5.0`, iar RPC-ul
   `get_state` a returnat `success:true` prin PRoot.
 
-**Neefectuat încă.** Compilarea celor două APK-uri, randarea CI a tabului,
-instalarea pe telefon și proba fără rețea pe APK nu erau încheiate la momentul
-acestei note. Acestea nu se declară verificate până la rezultatele workflow-ului.
-Dimensiunea livrată va crește substanțial, în special pentru Ziva. Licența Ziva
-este proprietară; arhivele sunt doar în build-ul personal, necomercial, fără a
-pretinde drept de redistribuire.
+**Verificat în CI și în APK.** Ambele workflow-uri au trecut integral
+(`runtime`, `android`, `native-editor`):
 
-Jurnal: 3.11.2026 — AG-89, pachetele runtime sunt generate în APK, instalarea
-Pi/Ziva nu mai descarcă, iar Setări are consola de actualizare. Urmează CI,
-APK-urile și proba Android.
+- standard: [41690102002](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41690102002),
+  artefact `13257208495`; APK **185.795.978 bytes**, SHA-256
+  `068b505a79267fd45b32d75ce98c037c5060c285c4fc6340df65f99eab11e17b`,
+  certificat `53c1cd8cf3376c37ca784fb4e1501847430c56f87f9016ad8ab30766e51440a0`;
+- Ziva: [41690107847](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41690107847),
+  artefact `13256994323`; APK **542.629.218 bytes**, SHA-256
+  `31c3f3404b663de9a6a22bc6375186d7c0e0d8dd2d8199041e802a9a534d8c64`,
+  certificat `591551d8b0ac247592f19c99b5ea27bc2dd738dbb128cdda269e2d580229628c`.
+- Randare: **966 verificări × 5 configurări** upstream și **997 × 5** în editorul
+  nativ, fără eșecuri. Scenariul nou `packages` are **59/0**, iar ecranul Start
+  cu noul tab are **70/0**.
+- Ambele APK-uri au trecut `apksigner` v2 și `unzip -t`; toate hash-urile din
+  manifestul de pachete corespund. `standard` nu conține niciun asset Ziva.
+- `/storage/emulated/0/Download` a fost înlocuit atomic la **3.11.2026,
+  19:50:32 CET**. Rămân numai cele două instalatoare curente și checksum-urile;
+  versiunile anterioare sunt în `godot-ai-artifacts/55eec40c4c/previous/`.
+- Dovezi: `godot-ai-artifacts/55eec40c4c/`, inclusiv `delivery.json` și logurile
+  CI standard/Ziva.
+
+**Limite rămase.** Dispozitivul ADB `10.146.52.179:38329` a refuzat conexiunea
+în timpul verificării finale (`connection refused`/`offline`). APK-urile nu au
+fost instalate sau rulate pe telefon și nu există încă o probă de actualizare
+cu rețeaua oprită pe dispozitiv. Probele locale PRoot acoperă instalarea
+offline, dar nu înlocuiesc serviciile Android/Binder.
+
+Secretul de semnare persistent nu este disponibil în noul repository, deci
+fiecare rulare CI a folosit o cheie debug aleatoare; standard și Ziva au
+certificate diferite, iar actualizarea peste aplicațiile deja instalate poate
+fi refuzată până la dezinstalare sau configurarea unei chei stabile. Nu am
+dezinstalat aplicația Ziva, deoarece datele ei private pot fi pierdute.
+
+Licența Ziva este proprietară; arhivele sunt doar în build-ul personal,
+necomercial, fără a pretinde drept de redistribuire. Blender rămâne opțional și
+nu face parte din setul minim.
+
+Jurnal: 3.11.2026 — AG-89, ambele APK-uri au fost compilate și verificate,
+pachetele offline sunt în instalatoare, iar Download conține doar versiunile
+curente. Proba pe telefon și cheia de semnare stabilă rămân deschise.
 
 ## AG-87 — Pi deține uneltele, sesiunea și contextul — 3.11.2026
 
