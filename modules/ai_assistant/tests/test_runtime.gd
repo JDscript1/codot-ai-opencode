@@ -48,6 +48,12 @@ class GodotMCPPanelBridge:
 	extends Node
 	var searches = []
 	var executions = []
+	func agent_catalog() -> Array:
+		return [
+			{"name": "editor_capture", "description": "Capture editor pixels", "risk": "read", "parameters": {"type": "object", "properties": {}, "additionalProperties": false}},
+			{"name": "godot_project_map", "description": "Inspect the project map", "risk": "read", "parameters": {"type": "object", "properties": {}}},
+			{"name": "godot_create_node", "description": "Create a scene node", "risk": "write", "parameters": {"type": "object", "properties": {"type": {"type": "string"}}, "required": ["type"]}},
+		]
 	func agent_search(query: String, limit: int = 20) -> Dictionary:
 		searches.append([query, limit])
 		return {"ok": true, "result": [{"name": "godot_create_node", "description": "Create a node", "risk": "write"}]}
