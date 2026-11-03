@@ -1,5 +1,10 @@
 # Built-in Godot agent harness
 
+> **Current Android routing:** Agent AI uses the app-owned [Pi RPC harness](PI_RPC.md)
+> for API-key and local profiles. This document describes the native fallback,
+> which remains active for ChatGPT SIWC, companion profiles, and profiles without
+> a Pi route.
+
 The fork owns its agent harness. `modules/ai_assistant/runtime/harness.gd` runs
 inside the Godot editor using engine objects and native HTTP adapters. It is
 embedded in the editor binary by `runtime_builder.py`, alongside the other

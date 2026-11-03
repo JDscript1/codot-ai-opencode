@@ -289,12 +289,11 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 	override fun onStop() {
 		AIVoice.pause(this)
 		AIZivaWindow.pause(this)
-		AIOpenCodeWindow.pause(this)
 		super.onStop()
 	}
 
 	override fun onDestroy() {
-		AIOpenCodeRuntime.release(this)
+		AIPiRuntime.release(this)
 		AIZivaRuntime.release(this)
 		AIZivaWindow.release(this)
 		AIMicrophonePermission.release(this)
@@ -467,7 +466,6 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 
 		runOnUiThread {
 			AIZivaWindow.register(this, godotFragment?.godot?.renderView?.view)
-			AIOpenCodeWindow.register(this, godotFragment?.godot?.renderView?.view)
 			// Enable long press, panning and scaling gestures
 			godotFragment?.godot?.renderView?.inputHandler?.apply {
 				enableLongPress(longPressEnabled)
@@ -502,7 +500,6 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 		super.onResume()
 		AIVoice.initialize(this)
 		AIZivaWindow.resume(this)
-		AIOpenCodeWindow.resume(this)
 		AIZivaRuntime.resume(this)
 		updateWindowAppearance()
 

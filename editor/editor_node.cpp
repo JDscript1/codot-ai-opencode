@@ -9419,7 +9419,6 @@ EditorNode::EditorNode() {
 	AIAssistantEditorPlugin *ai_assistant_plugin = memnew(AIAssistantEditorPlugin);
 	add_editor_plugin(ai_assistant_plugin);
 	add_editor_plugin(memnew(AIZivaEditorPlugin));
-	add_editor_plugin(memnew(AIOpenCodeEditorPlugin));
 #endif
 
 	// More visually meaningful to have this later.

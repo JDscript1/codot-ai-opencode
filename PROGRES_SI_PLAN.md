@@ -8,6 +8,69 @@ etapă importantă: implementare, verificare, compilare sau livrare. „Implemen
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
 
+## AG-85 — Agent AI pe Pi RPC, fără OpenCode TUI — 3.11.2026
+
+**Cerință.** Agentul propriu trebuie să folosească runtime-ul și harness-ul Pi,
+cu uneltele native Pi cablate la toate capabilitățile aplicației. OpenCode TUI
+se scoate din distribuția curentă; Ziva și proiectul vechi rămân neatinse.
+
+**Implementat în surse.** Branch-ul `feat/pi-rpc` pornește de la arhiva
+`archive/opencode-tui-20261102` (`b409c622f1`). Au fost eliminate tabul și
+pluginul OpenCode, runtime-ul Kotlin, fereastra WebView, PTY-ul nativ și activele
+xterm. `main` nu a fost modificat.
+
+- `AIPiRuntime.kt` instalează Node.js `22.19.0` și
+  `@earendil-works/pi-coding-agent@1.5.0` în PRoot, fixează versiunile, scrie
+  `models.json`, `mcp.json` și `settings.json` în directorul privat
+  `/root/.pi/agent`, pornește `--mode rpc --no-approve` și expune acțiunile
+  `pi_status`, `pi_install`, `pi_cancel`, `pi_start`, `pi_send`, `pi_poll`,
+  `pi_abort`, `pi_stop`.
+- `pi_session.gd` transformă profilurile API și locale în furnizori Pi și
+  grupează modelele după `openai-completions`, `openai-responses`,
+  `anthropic-messages` și `google-generative-ai`. Profilurile sunt reconstruite
+  la fiecare tură; o cheie sau un model schimbat nu reutilizează configurația
+  veche. SIWC și companion rămân pe harness-ul nativ.
+- `godot_mcp.gd` expune catalogul aplicației prin meta-uneltele `search`,
+  `describe` și `call`, cu Bearer token, loopback, corpuri chunked și imagini
+  MCP. Configurația Pi folosește `"exposure": "direct"` și un timeout de o oră
+  pentru aprobări.
+- `panel.gd` păstrează conversația și cardurile aplicației, trimite contextul de
+  proiect, fișiere, referințe și imagini, mapează evenimentele RPC, salvează
+  rezultatele reale ale uneltelor în istoric și detectează schimbările făcute de
+  `bash`, `edit` și `write` prin snapshot-uri mărginite.
+- Plan și Ask sunt read-only pentru Pi. Auto și Default primesc uneltele native
+  complete. Operațiile MCP ale aplicației păstrează planul Auto și dialogul de
+  aprobare; uneltele native Pi rulează direct în PRoot, fără acel dialog, cum a
+  fost cerut.
+
+**Verificat local.** `gdparse` a trecut pe toate scripturile
+`modules/ai_assistant/runtime/*.gd` și pe `test_runtime.gd`. `py_compile` a
+trecut pe generatorul de runtime și runner-ele Python, iar `git diff --check`
+este curat. Configurația `models.json` produsă de aplicație a fost acceptată de
+Pi 1.5.0 prin `--list-models`, inclusiv un model fără câmp `cost`. Pachetul
+`node-linux-arm64@22.19.0` a fost inspectat: binarul este ELF 64-bit AArch64 cu
+interpretor glibc, potrivit pentru Debianul din PRoot. O probă
+end-to-end locală cu un furnizor OpenAI-compatible simulat și un server MCP
+simulat a confirmat că Pi primește cele șapte unelte native plus
+`mcp__godot__search`, `mcp__godot__describe` și `mcp__godot__call`, iar un apel
+`search` trece prin MCP și rezultatul intră în turul următor. Proba nu folosește
+un cont sau furnizor real.
+
+**Neefectuat încă.** Compilarea Kotlin/APK, CI, instalarea Node.js ARM64 din APK,
+pornirea Pi în PRoot, afișarea UI pe dispozitiv și un test live cu furnizor real.
+Nu se declară aceste etape trecute până la dovezi.
+
+**Limite.** Uneltele native Pi nu pot fi interceptate de planul Auto sau de
+aprobările aplicației; schimbările lor sunt observate mărginit, fără rollback
+exact. `plan_ask` din Pi creează un card detașat de apelul MCP. O singură sesiune
+rulează pe un proiect, iar versiunile Pi/Node trebuie reverificate la actualizări.
+Detalii: `docs/PI_RPC.md`.
+
+Jurnal: 3.11.2026 — AG-85, Agent AI mutat pe Pi RPC, OpenCode TUI scos din surse,
+profiluri API/locale și unelte Godot prin MCP direct. Verificări statice și probe
+Pi simulate trecute; CI, APK, instalarea pe dispozitiv și furnizorul live rămân
+de făcut.
+
 ## AG-84 — OpenCode TUI ca runtime de agent, cu unelte Godot prin MCP — 2.11.2026
 
 **Cerință.** Asistentul propriu trebuie păstrat ca fallback, dar aplicația are
@@ -152,7 +215,7 @@ repornirea. Nu există probă live cu un furnizor OpenCode; `/connect` și
 `/models` rămân de validat pe un cont real.
 CLI-ul este fixat la `2.2.5`, iar o actualizare poate schimba numele
 acțiunilor sau formatul configurației V2. O singură sesiune OpenCode rulează
-odată, pe un singur proiect. Detalii: `docs/OPENCODE_RUNTIME.md`.
+odată, pe un singur proiect. Detalii istorice: branch-ul `archive/opencode-tui-20261102`.
 
 Jurnal: 2.11.2026 — AG-84, tab OpenCode, runtime npm în PRoot, PTY nativ,
 terminal xterm și server MCP cu unelte Godot. Pe NX729J-UN s-a diagnosticat

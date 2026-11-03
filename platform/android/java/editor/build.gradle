@@ -231,9 +231,7 @@ tasks.register('buildAiEmbeddedRuntime') {
     def runtimeTools = new File(rootDir, '../../../tools/embedded-runtime').canonicalFile
     def generated = file("$buildDir/generated/ai-runtime")
     def output = new File(generated, 'jniLibs/arm64-v8a/libai_runtime_probe.so')
-    def pty = new File(generated, 'jniLibs/arm64-v8a/libai_pty.so')
     inputs.file('src/main/native/ai_runtime_probe.c')
-    inputs.file('src/main/native/ai_pty.c')
     inputs.dir(runtimeTools)
     outputs.dir(generated)
     doLast {
@@ -245,12 +243,6 @@ tasks.register('buildAiEmbeddedRuntime') {
         exec {
             commandLine clang, '--target=aarch64-linux-android24', '-fPIE', '-pie',
                     '-Wl,--build-id=none', '-s', file('src/main/native/ai_runtime_probe.c'), '-o', output
-        }
-        // The OpenCode TUI needs a controlling terminal; Java pipes cannot provide one.
-        exec {
-            commandLine clang, '--target=aarch64-linux-android24', '-fPIE', '-pie', '-O2',
-                    '-Wall', '-Wextra', '-Wl,--build-id=none', '-Wl,-z,max-page-size=16384', '-s',
-                    file('src/main/native/ai_pty.c'), '-o', pty
         }
         exec {
             commandLine 'python3', new File(runtimeTools, 'build.py'), '--ndk', ndk,

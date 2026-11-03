@@ -24,6 +24,8 @@ opens the same global configuration window.
   self-hosted server behind a public HTTPS domain.
 - **Abonamente:** use **Continue with ChatGPT** for the native SIWC flow. Claude,
   Copilot and Kimi use the optional companion on your own computer/server.
+  On Android, API-key and local profiles use the app-owned [Pi RPC harness](PI_RPC.md);
+  SIWC and companion profiles intentionally fall back to the native harness.
 - **Generare:** choose Runware, Meshy, Tripo, OpenAI Images or an existing ComfyUI
   server. Import a workflow exported in API format, bind its prompt/reference fields
   and output node, then validate the server. PNG and self-contained GLB 2.0 are supported.
@@ -153,15 +155,29 @@ The Romanian [project progress record](../PROGRES_SI_PLAN.md) tracks implemented
 work, verification, the delivered APK, and the remaining plan. It is updated at
 each substantial AI development/build/delivery milestone.
 
-The [built-in agent harness](AI_HARNESS.md) runs direct-provider turns inside
-Godot, including independent child sessions. Its model/tool loop does not require
-Termux, a console, an external agent SDK, or the optional companion. It owns
-streaming events, bounded model retries, cancellation, result deduplication, and
-checkpoint handling. The model endpoint itself remains a separately configured
-cloud or local service. Companion-backed subscriptions and MCP stdio retain their
-existing optional external hosts.
+The [built-in agent harness](AI_HARNESS.md) remains the fallback for ChatGPT
+SIWC, companion subscriptions, and profiles without a Pi route. It still runs
+direct-provider turns inside Godot, including independent child sessions, and
+does not require Termux, a console, an external agent SDK, or the companion.
 
-Direct runs discover specialized tools through `tool_search`/`tool_describe`.
+On Android, **Agent AI** now uses the app-owned [Pi 1.5.0 RPC harness](PI_RPC.md)
+for API-key and local profiles. Pi is installed privately inside the existing
+Debian/PRoot runtime and is controlled through JSONL RPC. Its native `read`,
+`bash`, `edit`, `write`, `grep`, `find`, and `ls` tools run directly in PRoot.
+The complete Godot tool catalog is exposed through a loopback MCP server with
+the `search`, `describe`, and `call` meta-tools, declared as `direct` exposure.
+The AI Assistant panel owns streaming, history, approvals, and edit cards; there
+is no Pi tab or terminal. Profiles are rebuilt each turn so changed keys, models,
+and endpoints cannot reuse stale Pi configuration.
+
+Plan and Ask remain read-only. Auto and Default receive the full Pi tool set;
+application MCP writes retain the existing Plan/Auto checks and native approval
+dialog, while native Pi file/shell operations intentionally run without that
+dialog. Native Pi changes are observed with bounded snapshots but do not gain a
+new exact rollback guarantee. This is a product tradeoff, not an isolation
+boundary. Pi runs with the permissions of the app-owned PRoot filesystem.
+
+Direct native runs discover specialized tools through `tool_search`/`tool_describe`.
 Coding tools include bounded line reads/search, version-checked exact patches
 with preview/recovery, and a native GDScript diagnostics bridge. MCP results
 preserve structured data and model images and expose execution errors. See the
