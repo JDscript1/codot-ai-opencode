@@ -33,11 +33,11 @@ def glb():
 
 
 class Fixtures(http.server.BaseHTTPRequestHandler):
-    generation_submissions = {}
-    conversion_posts = {}
-    conversion_polls = {}
-    background_jobs = set()
-    recovered_jobs = set()
+    generation_submissions: dict[str, int] = {}
+    conversion_posts: dict[str, int] = {}
+    conversion_polls: dict[str, int] = {}
+    background_jobs: set[str] = set()
+    recovered_jobs: set[str] = set()
     protocol_version = "HTTP/1.1"
 
     def log_message(self, *args):

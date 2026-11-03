@@ -13,7 +13,7 @@ exclude = ["thirdparty/"]
 python_version = "3.9"
 
 [tool.ruff]
-extend-exclude = ["thirdparty", "modules/ai_assistant/tests/run.py"]
+extend-exclude = ["thirdparty", "modules/ai_assistant/tests/run.py", "modules/ai_assistant/icons/sync.py"]
 extend-include = ["*SConstruct", "*SCsub"]
 target-version = "py39"
 line-length = 120
