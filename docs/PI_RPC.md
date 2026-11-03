@@ -1,6 +1,6 @@
 # Agent AI pe Pi RPC
 
-Stare: **implementat în surse; validat cu Pi 1.5.0 pe protocol simulat; compilarea Android și proba live rămân separate.**
+Stare: **implementat în surse, compilat în APK în CI; instalarea pe dispozitiv și proba live rămân separate.**
 
 Agentul **Agent AI** folosește acum Pi ca harness propriu al aplicației. Nu există
 tab Pi și nu este pornit un terminal: conversația, aprobările și cardurile de
@@ -147,6 +147,9 @@ istoricul aplicației.
 - `test_pi_runtime.py`: cinci verificări statice pentru versiuni, `exposure`,
   timeout, modul read-only, calea normală de aprobare și absența suprafeței
   OpenCode;
+- escapare `$`/`!` pentru `apiKey` a fost verificată direct cu resolverul Pi
+  1.5.0: cheile literale nu mai pot declanșa expansiune de mediu sau comenzi
+  shell prin sintaxa configurației;
 - configurația `models.json` generată de aplicație a fost acceptată de Pi 1.5.0
   cu `--list-models` (inclusiv model fără câmp `cost`);
 - pachetul `node-linux-arm64@22.19.0` conține un ELF 64-bit AArch64 (ET_EXEC)
@@ -160,6 +163,43 @@ istoricul aplicației.
 
 Aceste probe validează protocolul și configurația, **nu** un furnizor real, un
 cont, instalarea Node.js ARM64 din APK sau interfața pe dispozitiv.
+
+## Compilare CI
+
+Ambele distribuții au fost compilate din sursa
+`92b98d381932e2692e4ec9e5a82eb5e82f14ccef`:
+
+- [standard](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41606629516)
+  (`com.jdscript.godotai.debug`) și
+  [ziva-preview](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41606640713)
+  (`com.jdscript.godotai.ziva.debug`);
+- runtime-ul a raportat **1015 aserțiuni, 0 eșecuri** în ambele rulări;
+- editorul nativ compilat a trecut **991 de verificări, 0 eșecuri** în fiecare
+  dintre cele cinci configurații, plus suitele focalizate 134/75/76/71/76/90;
+- jobul Android a verificat semnătura v2, package-ul, ABI ARM64, clasele
+  `AIPiRuntime` în dex, absența suprafeței OpenCode/PTY, runtime-ul încorporat și
+  toate cele **46 de scripturi** `runtime/*.gd` byte cu byte.
+
+Artefactele au fost descărcate și verificate local:
+
+| Distribuție | Bytes | SHA-256 | Certificat SHA-256 |
+|---|---:|---|---|
+| standard | 112.627.098 | `599b0f0d2af894e874236cdb42375f46a244628a4077ba0dc1bc526c9bea0a35` | `891fadfa32ff0262ddf19b5db55e5308f16d1c5b77e1f308c9d9748d14e3aad4` |
+| Ziva | 112.628.630 | `a78670f5315d9c8ab57eb99f571d81b83721f1976baf1735452d9c7cb54a547a` | `e12cc9609a9f636eb24b0a35f3be1136bb74a116dd6891b7189faf93641ee044` |
+
+APK-urile vechi din Download folosesc certificatul persistent
+`2e0a80969c099f7ff72bfe0c0cd33d98ebdd0e64bbf9729294df0b11665fcab5` din
+repository-ul anterior. Noul repository nu are secretul
+`GODOT_AI_DEBUG_KEYSTORE`, deci build-urile de aici folosesc chei debug
+efemerale. Instalarea peste aplicația existentă cere fie aceeași cheie de
+semnare, fie dezinstalare; APK-ul nu este instalat automat.
+
+Copiile cu nume stabile din Download au fost înlocuite atomic la
+**3.11.2026, 10:55 CET**: `Godot-AI-Android-arm64-debug.apk` și
+`Godot-AI-Ziva-arm64-debug.apk`, fiecare cu checksum alăturat. Instalatoarele
+anterioare sunt păstrate numai ca dovezi în
+`~/godot-ai-artifacts/pi-rpc-92b98d3819/previous/`; în Download au rămas cele
+două build-uri noi.
 
 ## Limite
 
@@ -179,5 +219,8 @@ cont, instalarea Node.js ARM64 din APK sau interfața pe dispozitiv.
   în Auto/Default și pe harness-ul nativ.
 - O singură sesiune Pi rulează pe un singur proiect. Versiunile Pi/Node sunt
   fixate și trebuie reverificate la fiecare actualizare.
+- Identitatea de semnare nu este încă persistentă în acest repository. Pentru
+  update-uri instalabile fără dezinstalare trebuie adăugat secretul keystore-ului
+  existent sau configurată o cheie stabilă înaintea următorului build.
 - Fallback-ul nativ rămâne necesar pentru ChatGPT SIWC, companion și orice
   profil fără rută Pi.

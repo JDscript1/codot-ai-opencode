@@ -54,22 +54,52 @@ end-to-end locală cu un furnizor OpenAI-compatible simulat și un server MCP
 simulat a confirmat că Pi primește cele șapte unelte native plus
 `mcp__godot__search`, `mcp__godot__describe` și `mcp__godot__call`, iar un apel
 `search` trece prin MCP și rezultatul intră în turul următor. Proba nu folosește
-un cont sau furnizor real.
+un cont sau furnizor real. Escaparea `$`/`!` din cheile API a fost verificată cu
+resolverul Pi, astfel încât o cheie literală să nu poată rula comenzi prin
+sintaxa `!command` a configurației.
 
-**Neefectuat încă.** Compilarea Kotlin/APK, CI, instalarea Node.js ARM64 din APK,
-pornirea Pi în PRoot, afișarea UI pe dispozitiv și un test live cu furnizor real.
-Nu se declară aceste etape trecute până la dovezi.
+**Verificat în CI și în APK.** Rulările
+[41606629516](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41606629516)
+(standard) și
+[41606640713](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41606640713)
+(Ziva) au trecut toate cele trei joburi pe sursa `92b98d3819`. Runtime-ul a
+raportat **1015 aserțiuni, 0 eșecuri** în fiecare rulare. Editorul nativ a trecut
+**991 de verificări, 0 eșecuri** în fiecare dintre cele cinci configurații, plus
+suitele focalizate 134/75/76/71/76/90. Jobul Android a verificat semnătura v2,
+package-urile `com.jdscript.godotai.debug` și `com.jdscript.godotai.ziva.debug`,
+ABI ARM64, clasa `AIPiRuntime`, absența OpenCode/PTY și cele **46 de scripturi**
+încorporate byte cu byte.
+
+APK standard: **112.627.098 bytes**, SHA-256
+`599b0f0d2af894e874236cdb42375f46a244628a4077ba0dc1bc526c9bea0a35`.
+APK Ziva: **112.628.630 bytes**, SHA-256
+`a78670f5315d9c8ab57eb99f571d81b83721f1976baf1735452d9c7cb54a547a`.
+Ambele artefacte au fost descărcate, li s-au verificat SHA-256, ZIP-ul, package-ul,
+ABI-ul, clasele și scripturile; semnătura APK v2 fusese verificată de CI.
+Artefactele sunt în `~/godot-ai-artifacts/pi-rpc-92b98d3819/`. La
+**3.11.2026, 10:55 CET** au fost înlocuite atomic cele două installere cu nume
+stabil din Download, cu checksum alăturat; copiile vechi au fost păstrate numai
+în subdirectorul `previous/` al artefactelor. În Download nu au rămas alte
+installere ale fork-ului.
+
+**Neefectuat încă.** Instalarea Node.js ARM64 din APK, pornirea Pi în PRoot,
+afișarea UI pe dispozitiv și un test live cu furnizor real. `adb devices` nu avea
+niciun dispozitiv conectat în această rundă.
 
 **Limite.** Uneltele native Pi nu pot fi interceptate de planul Auto sau de
 aprobările aplicației; schimbările lor sunt observate mărginit, fără rollback
 exact. `plan_ask` din Pi creează un card detașat de apelul MCP. O singură sesiune
 rulează pe un proiect, iar versiunile Pi/Node trebuie reverificate la actualizări.
-Detalii: `docs/PI_RPC.md`.
+Repository-ul nou nu are `GODOT_AI_DEBUG_KEYSTORE`: APK-urile au chei debug
+efemerale (`891fadfa…` standard, `e12cc960…` Ziva), diferite de certificatul
+persistent `2e0a8096…` al aplicației existente. Instalarea peste versiunea veche
+cere aceeași cheie de semnare sau dezinstalare. Detalii: `docs/PI_RPC.md`.
 
 Jurnal: 3.11.2026 — AG-85, Agent AI mutat pe Pi RPC, OpenCode TUI scos din surse,
-profiluri API/locale și unelte Godot prin MCP direct. Verificări statice și probe
-Pi simulate trecute; CI, APK, instalarea pe dispozitiv și furnizorul live rămân
-de făcut.
+profiluri API/locale și unelte Godot prin MCP direct. Verificările statice, probele
+Pi simulate, ambele build-uri Android și verificările editorului nativ au trecut;
+APK-urile au fost livrate în Download, iar instalarea pe dispozitiv și furnizorul
+live rămân de probat. Semnătura APK este încă efemeră în repository-ul nou.
 
 ## AG-84 — OpenCode TUI ca runtime de agent, cu unelte Godot prin MCP — 2.11.2026
 
