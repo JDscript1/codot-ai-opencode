@@ -99,3 +99,24 @@ Rezultate reale:
 
 Aceasta dovedește lanțul Debian ARM64/PRoot/Blender/Godot în mediul de test.
 Nu dovedește încă instalarea și execuția prin APK-ul Android instalat pe telefon.
+
+## Livrare APK — 3 noiembrie 2026
+
+CI-ul a construit ambele distribuții din `3d3a7992f1`. Joburile Android și
+native-editor au trecut; la Ziva, primul job runtime a avut un segfault Godot
+după 966 de verificări de randare, iar reluarea jobului a trecut.
+
+| Distribuție | Bytes | SHA-256 | Pachete Debian |
+|---|---:|---|---:|
+| standard | 441.882.872 | `f0de6f42dd965ddf6a6b8187692548fb6c9876a7116fc84ad4b7546b7fb308ef` | 377 |
+| Ziva | 747.086.184 | `1d72a814745c0811f39cafedeb94834418ed8f309adba68f6cb17f70510ea36d` | 387 |
+
+Ambele APK-uri au semnătură v2 validă, package ID corect, Blender 4.3.2,
+`python3-numpy`, repository offline și oferta de surse. Instalatoarele din
+Download au fost înlocuite atomic; cele vechi sunt în
+`~/godot-ai-artifacts/ag91-previous-download/`.
+
+Cheile de semnare din acest build sunt debug efemere și diferă de aplicația
+instalată anterior. Upgrade-ul in-place necesită keystore-ul persistent sau
+dezinstalarea aplicației; nu s-a dezinstalat nimic. Instalarea pe telefon și
+controlul live prin Agent AI rămân neefectuate.

@@ -25,6 +25,13 @@ importat GLB-ul cu un mesh. Detaliile și hash-urile sunt în
 [Blender inclus în APK](BLENDER_BUNDLE.md). Proba nu acoperă APK-ul instalat,
 Agent AI live, Eevee/GPU sau performanța pe telefon.
 
+Ambele APK-uri AG-91 au fost construite de CI și verificate local; conțin
+Blender, numpy, repository-ul offline și oferta de surse. APK-urile din Download
+au fost înlocuite, iar vechile instalatoare au fost păstrate în
+`~/godot-ai-artifacts/ag91-previous-download/`. Instalarea pe telefon nu a fost
+posibilă: ADB nu are dispozitiv conectat, iar certificatul debug efemer diferă
+de aplicația deja instalată.
+
 ## Etapa 1: proba de executare
 
 Editorul construiește un executabil PIE ARM64 foarte mic (`ai_runtime_probe.c`) cu NDK și îl include în APK sub `lib/arm64-v8a/libai_runtime_probe.so`. Android îl extrage în directorul bibliotecilor native. Serviciul neexportat `AIEmbeddedRuntimeService` rulează în procesul aplicației `:ai_runtime`, pornește numai acel fișier cunoscut, așteaptă cel mult opt secunde și întoarce rezultatul printr-un receiver neexportat. Puntea Godot acceptă intern `embedded_probe` și `embedded_status` pentru diagnostic. Aceasta verifică mecanismul de proces, izolare și executare; **nu instalează și nu pornește încă PRoot sau Blender**.

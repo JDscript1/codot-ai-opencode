@@ -235,6 +235,14 @@ Instalatoarele curente din Download au fost ulterior recompilate din
 este neschimbată. Detaliile livrării SIWC sunt în AG-88 din
 [jurnalul proiectului](../PROGRES_SI_PLAN.md).
 
+**Actualizare AG-91 — 3.11.2026.** Download conține acum build-urile din
+`3d3a7992f1`, cu Blender 4.3.2, numpy, repository-ul Debian offline și aceeași
+arhitectură Pi: standard 441.882.872 bytes, SHA-256
+`f0de6f42dd965ddf6a6b8187692548fb6c9876a7116fc84ad4b7546b7fb308ef`; Ziva
+747.086.184 bytes, SHA-256
+`1d72a814745c0811f39cafedeb94834418ed8f309adba68f6cb17f70510ea36d`.
+Instalatoarele anterioare sunt în `~/godot-ai-artifacts/ag91-previous-download/`.
+
 ## Limite
 
 - Binarul Node.js ARM64 și instalarea Pi în PRoot nu au fost încă rulate pe

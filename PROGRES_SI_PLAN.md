@@ -169,10 +169,33 @@ adaugă aproximativ **800 MB**; sunt necesari cel puțin 2,5 GB liberi.
   Blender bundled și Termux legacy; **12 teste** pentru runtime-ul încorporat;
 - `gdparse` și `git diff --check` au trecut.
 
-**Neefectuat.** Buildul APK pentru AG-91, instalarea pe telefon, controlul live
-prin Agent AI/Pi, randarea Eevee/GPU, testarea AAA și curățarea Termux.
-Download-ul nu a fost încă înlocuit; APK-urile vechi rămân până la un build nou
-verificat. Termux rămâne neatins.
+**CI și APK — 3.11.2026.**
+
+- standard: [run 41712166637](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41712166637),
+  toate joburile `runtime`, `native-editor` și `android` au trecut;
+- Ziva: [run 41712168318](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41712168318),
+  `android` și `native-editor` au trecut; primul `runtime` a picat după 966 de
+  verificări într-un segfault Godot la randarea `phone_landscape`, iar jobul
+  `runtime` reluat a trecut;
+- standard: **441.882.872 bytes**, SHA-256
+  `f0de6f42dd965ddf6a6b8187692548fb6c9876a7116fc84ad4b7546b7fb308ef`,
+  certificat `652ed3795ecefdc1e7303d68a1fbebba6b9034847334c62a6d795f40fa842a28`;
+- Ziva: **747.086.184 bytes**, SHA-256
+  `1d72a814745c0811f39cafedeb94834418ed8f309adba68f6cb17f70510ea36d`,
+  certificat `243bcb2368fd4f17cd64259b5cca4a651da4adf42732c093f4d9721956e772b3`;
+- ambele APK-uri au trecut `apksigner` v2, au package ID-urile așteptate și
+  conțin `BLENDER_SOURCE_OFFER.txt`, `blender 4.3.2+dfsg-2`, `python3-numpy`,
+  repository-ul offline și hash-urile declarațate; standard are 377 pachete
+  Debian, Ziva 387;
+- instalatoarele din **Download** au fost înlocuite atomic la
+  **3.11.2026, 22:21 CET**. Vechile fișiere sunt păstrate în
+  `~/godot-ai-artifacts/ag91-previous-download/`, nu în Download.
+
+**Neefectuat.** Instalarea pe telefon și controlul live prin Agent AI/Pi,
+randarea Eevee/GPU, testarea AAA și curățarea Termux. `adb devices` nu are niciun
+dispozitiv conectat. Certificatele APK-urilor noi sunt chei debug efemere,
+diferite de aplicația deja instalată; actualizarea in-place cere keystore-ul
+persistent sau dezinstalare. Nu am dezinstalat nimic. Termux rămâne neatins.
 
 ## AG-89 — pachete runtime incluse în APK și actualizare offline — 3.11.2026
 

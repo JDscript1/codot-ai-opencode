@@ -1,5 +1,16 @@
 # Ziva independent în Godot AI — preview
 
+## Livrare AG-91 — 3.11.2026
+
+Distribuția `ziva-preview` din `3d3a7992f1` a fost construită de CI și
+înlocuită în Download. Instalatorul are **747.086.184 bytes**, SHA-256
+`1d72a814745c0811f39cafedeb94834418ed8f309adba68f6cb17f70510ea36d` și
+conține 387 de pachete Debian, inclusiv Blender 4.3.2 și numpy, plus runtime-ul
+oficial Ziva. Joburile `android` și `native-editor` au trecut; jobul `runtime`
+a fost reluat după un segfault Godot în randarea UI și a trecut. Instalarea pe
+telefon și proba live Ziva rămân neefectuate; certificatul debug este efemer și
+diferă de aplicația deja instalată.
+
 ## Delegare către agentul Ziva — 31.10.2026
 
 Agentul nostru poate cere oficialului Ziva o sarcină de sine stătătoare, prin
