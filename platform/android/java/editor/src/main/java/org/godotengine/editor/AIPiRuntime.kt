@@ -28,7 +28,6 @@ object AIPiRuntime {
     private const val AGENT_DIR = "root/.pi/agent"
     private const val SESSION_DIR = "/root/.pi/sessions"
     private const val MIN_FREE_BYTES = 900L * 1024 * 1024
-    private const val INSTALL_TIMEOUT_SECONDS = 2400
     private const val MAX_EVENTS = 4096
     private const val TAIL_LIMIT = 16000
     private val APP_INSTRUCTIONS = """
@@ -125,6 +124,8 @@ object AIPiRuntime {
             .put("min_free_bytes", MIN_FREE_BYTES)
     }
 
+    internal fun isBusy(): Boolean = process?.isAlive == true || worker?.isAlive == true
+
     fun command(context: Context, action: String, arguments: JSONObject): JSONObject = when (action) {
         "pi_status" -> status(context, arguments.optString("project_directory"))
         "pi_install" -> install(context)
@@ -160,17 +161,11 @@ object AIPiRuntime {
         try {
             val runtime = AILinuxRuntime.core(context, { cancelInstall.get() }) { chunk -> installProgress(chunk) }
             check(runtime.state().optBoolean("ready")) { "Runtime-ul Linux nu este pregătit." }
-            val tools = runtime.state().optJSONObject("tools") ?: JSONObject()
-            val missing = listOf("node", "git", "ripgrep").filter { !tools.has(it) }
-            if (missing.isNotEmpty()) AILinuxRuntime.preparePackageNetwork(context, runtime)
-            for ((index, tool) in missing.withIndex()) {
-                stage(5 + index * 10, "Instalez ${tool} în runtime-ul Linux…")
-                runtime.installTool(tool)
-            }
-            AILinuxRuntime.preparePackageNetwork(context, runtime)
-            stage(45, "Descarc Node.js $NODE_VERSION și Pi $PI_VERSION (~250 MB). Ține aplicația deschisă; ecranul rămâne aprins…")
-            val result = npmInstall(runtime)
-            check(result.getInt("exit_code") == 0) { "npm install a eșuat: " + result.optString("output").takeLast(1200) }
+            val packages = AIPackageManager.manifest(context)
+            stage(20, "Instalez utilitarele Debian incluse în APK…")
+            AIPackageManager.installDebian(context, runtime, packages, { cancelInstall.get() }) { text -> installProgress(text + "\n") }
+            stage(55, "Extrag Node.js $NODE_VERSION și Pi $PI_VERSION din APK. Nu se descarcă nimic…")
+            AIPackageManager.installPi(context, runtime, packages, { cancelInstall.get() }) { text -> installProgress(text + "\n") }
             check(installed(context)) { "Binarele Pi sau Node nu au fost găsite după instalare." }
             val version = guestVersion(context)
             stage(92, "Verific Node.js și Pi…")
@@ -188,25 +183,6 @@ object AIPiRuntime {
         } finally {
             keepScreenOn(false); worker = null; cancelInstall.set(false)
         }
-    }
-
-    private fun npmInstall(runtime: AILinuxRuntimeFiles): JSONObject {
-        // The node package uses a lifecycle script to materialize the native
-        // ARM64 binary, so it must run normally. Pi itself is installed with
-        // lifecycle scripts disabled because it is a reviewed JS bundle.
-        val node = runtime.launch(listOf(
-            "/usr/bin/npm", "install", "--prefix", "/root/.local", "--no-audit", "--no-fund",
-            "--loglevel=http", "--prefer-online", "--maxsockets=4",
-            "--fetch-retries=5", "--fetch-retry-mintimeout=2000", "--fetch-retry-maxtimeout=60000",
-            "--fetch-timeout=900000", "node@$NODE_VERSION"
-        ), null, INSTALL_TIMEOUT_SECONDS)
-        if (node.getInt("exit_code") != 0) return node
-        return runtime.launch(listOf(
-            "/usr/bin/npm", "install", "--prefix", "/root/.local", "--no-audit", "--no-fund",
-            "--loglevel=http", "--ignore-scripts", "--prefer-online", "--maxsockets=4",
-            "--fetch-retries=5", "--fetch-retry-mintimeout=2000", "--fetch-retry-maxtimeout=60000",
-            "--fetch-timeout=900000", "@earendil-works/pi-coding-agent@$PI_VERSION"
-        ), null, INSTALL_TIMEOUT_SECONDS)
     }
 
     private fun keepScreenOn(enabled: Boolean) {

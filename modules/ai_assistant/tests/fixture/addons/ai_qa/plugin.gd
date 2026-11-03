@@ -316,7 +316,7 @@ func _run() -> void:
 	panel.model_pricing.transport = AgentPricingTransport.new()
 	EditorInterface.set_main_screen_editor("AI Assistant" if native else "AI Assistant QA")
 	await get_tree().process_frame
-	_check(panel.profile_picker != null and panel.settings_tabs.get_tab_count() == 13, "Build all settings forms")
+	_check(panel.profile_picker != null and panel.settings_tabs.get_tab_count() == 14, "Build all settings forms")
 	var independent_ziva = EditorInterface.get_editor_main_screen().find_child("ZivaMainScreen", true, false)
 	if independent_ziva != null:
 		_check(not independent_ziva.management.visible, "The hidden Ziva tab never opens an exclusive management window at startup")
@@ -404,6 +404,10 @@ func _run() -> void:
 		await _linux_runtime_tests(OS.get_environment("GODOT_AI_QA_OUTPUT"))
 		_finish_report(OS.get_environment("GODOT_AI_QA_OUTPUT"))
 		return
+	if OS.get_environment("GODOT_AI_QA_SCENARIO") == "packages":
+		await _packages_settings_tests(true)
+		_finish_report(OS.get_environment("GODOT_AI_QA_OUTPUT"))
+		return
 	if OS.get_environment("GODOT_AI_QA_SCENARIO") == "ziva":
 		await _ziva_tests(OS.get_environment("GODOT_AI_QA_OUTPUT"))
 		_finish_report(OS.get_environment("GODOT_AI_QA_OUTPUT"))
@@ -457,6 +461,7 @@ func _run() -> void:
 	await _change_set_editor_tests()
 	await _history_button_tests()
 	await _settings_action_tests()
+	await _packages_settings_tests(false)
 	await _provider_connection_tests("")
 	await _generation_catalog_tests("")
 	await _provider_discovery_tests("")
@@ -1945,6 +1950,29 @@ func _settings_action_tests() -> void:
 		child.queue_free()
 	panel._refresh_lists()
 	DirAccess.remove_absolute(path)
+	await get_tree().process_frame
+
+func _packages_settings_tests(screenshot: bool) -> void:
+	var bridge = FixtureLinuxBridge.new()
+	add_child(bridge)
+	panel.ziva_runtime = bridge
+	panel.open_settings("packages")
+	await get_tree().process_frame
+	panel._packages_refresh(false)
+	_check(panel.section_tabs.has("packages") and panel.settings_tabs.get_tab_title(panel.section_tabs["packages"]) == "Actualizare pachete", "Packages update is the final Settings section")
+	_check(panel.package_console != null and panel.package_update != null and panel.package_copy != null, "Packages section exposes console, update and copy controls")
+	_check(panel.package_copy.text == "Copiază rezultatul", "Packages copy control is a visible text button")
+	panel.package_update.pressed.emit()
+	_check(panel.package_running and panel.package_job == "fixture-packages-job", "Packages update starts an owned cancellable job")
+	panel._packages_poll()
+	_check(not panel.package_running and "Pachete actualizate din fixture." in panel.package_console.text, "Packages console renders the completed update output")
+	if screenshot:
+		var output = OS.get_environment("GODOT_AI_QA_OUTPUT")
+		if not output.is_empty():
+			panel.settings_window.get_texture().get_image().save_png(output.path_join("packages-settings.png"))
+	panel.settings_window.hide()
+	panel.ziva_runtime = null
+	bridge.queue_free()
 	await get_tree().process_frame
 
 func _layout_tests() -> void:
@@ -3889,6 +3917,16 @@ class FixtureLinuxBridge:
 	var cancelled = false
 	func linux_runtime_request(action: String, args: Dictionary) -> Dictionary:
 		if action == "status": return state.duplicate(true)
+		if action == "packages_status":
+			return {"ok": true, "bundled": true, "distribution": "standard", "all_ready": true, "active_job": "", "last_job": "",
+				"linux": {"ready": true, "current": true, "release": "trixie"}, "debian": {"ready": true, "packages": 3},
+				"node": {"ready": true, "version": "22.19.0"}, "pi": {"ready": true, "version": "1.5.0"},
+				"ziva": {"bundled": false, "ready": false}, "godot": {"bundled": false, "ready": false}, "manifest": {"versions": {}}}
+		if action == "packages_update":
+			return {"ok": true, "id": "fixture-packages-job", "status": "queued"}
+		if action == "packages_poll":
+			return {"ok": true, "status": "completed", "output": "Pachete actualizate din fixture.\n", "result": linux_runtime_request("packages_status", {})}
+		if action == "packages_cancel": return {"ok": true, "cancelling": true}
 		if action == "cancel": cancelled = true; return {"ok": true}
 		if action == "poll":
 			polls += 1

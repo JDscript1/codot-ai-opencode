@@ -81,6 +81,12 @@ android {
     buildToolsVersion versions.buildTools
     ndkVersion versions.ndkVersion
 
+    androidResources {
+        // The runtime archives are already compressed. Recompressing the
+        // multi-hundred-megabyte Ziva archive wastes build time and APK RAM.
+        noCompress += ['zip', 'xz', 'tgz']
+    }
+
     sourceSets {
         main.jniLibs.srcDir "$buildDir/generated/ai-runtime/jniLibs"
         main.assets.srcDir "$buildDir/generated/ai-runtime/assets"
@@ -231,6 +237,7 @@ tasks.register('buildAiEmbeddedRuntime') {
     def runtimeTools = new File(rootDir, '../../../tools/embedded-runtime').canonicalFile
     def generated = file("$buildDir/generated/ai-runtime")
     def output = new File(generated, 'jniLibs/arm64-v8a/libai_runtime_probe.so')
+    inputs.property('godotAiDistribution', aiDistribution)
     inputs.file('src/main/native/ai_runtime_probe.c')
     inputs.dir(runtimeTools)
     outputs.dir(generated)
@@ -251,6 +258,12 @@ tasks.register('buildAiEmbeddedRuntime') {
         exec {
             commandLine 'python3', new File(runtimeTools, 'rootfs.py'),
                     '--work', file("$buildDir/ai-runtime-build"), '--output', generated
+        }
+        delete new File(generated, 'assets/godot_ai/packages')
+        exec {
+            commandLine 'python3', new File(runtimeTools, 'packages.py'),
+                    '--work', file("$buildDir/ai-runtime-build"), '--output', generated,
+                    '--distribution', aiDistribution
         }
     }
 }

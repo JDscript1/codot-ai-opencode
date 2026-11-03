@@ -110,7 +110,9 @@ def package(source, output, spec):
 def build(work, output):
     spec = json.loads((HERE / 'rootfs.json').read_text())
     work.mkdir(parents=True, exist_ok=True)
-    source = work / ('debian-' + spec['sha256'][:16] + '.tar.gz')
+    downloads = work / 'downloads'
+    downloads.mkdir(parents=True, exist_ok=True)
+    source = downloads / ('debian-' + spec['sha256'][:16] + '.tar.gz')
     if not source.exists():
         partial = source.with_suffix('.part')
         try:

@@ -216,25 +216,6 @@ class AIZivaPackage(private val root: File, private var spec: Release = activeRe
         check(count > 0) { "Componenta Ziva lipsește din pachet. Reinstalează Ziva." }
     }
 
-    fun install(cache: File, cancelled: () -> Boolean, progress: (String) -> Unit) {
-        check(cache.isDirectory || cache.mkdirs())
-        val previous = directory.exists()
-        val needed = spec.archiveSize + spec.runtimeSize + UNPACKED_LIMIT + (if (previous) UNPACKED_LIMIT else 0L) + 64L * 1024 * 1024
-        check(root.usableSpace >= needed) { "Sunt necesari aproximativ ${needed / (1024 * 1024)} MB liberi pentru instalarea Ziva." }
-        val archive = File(cache, "ziva-${UUID.randomUUID()}.zip")
-        val runtime = if (spec.runtimeSize > 0) File(cache, "ziva-runtime-${UUID.randomUUID()}.zip") else null
-        try {
-            progress("Descarc Ziva de la furnizor…")
-            AIDownload.fetch(spec.url, spec.archiveSize, archive, cancelled, progress, "Ziva")
-            if (runtime != null) {
-                progress("Descarc componenta Ziva…")
-                AIDownload.fetch(spec.runtimeUrl, spec.runtimeSize, runtime, cancelled, progress, "Ziva runtime")
-            }
-            progress("Verific pachetul Ziva…")
-            extract(archive, runtime, cancelled)
-        } finally { archive.delete(); runtime?.delete() }
-    }
-
     fun extract(archive: File, runtime: File? = null, cancelled: () -> Boolean = { false }) {
         check(archive.length() == spec.archiveSize && AILinuxRuntimeFiles.sha(archive) == spec.archiveHash) { "Verificarea SHA-256 Ziva a eșuat." }
         if (spec.runtimeSize > 0) {

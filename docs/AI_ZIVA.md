@@ -218,11 +218,12 @@ transmite `--distribution ziva-preview` către
 `misc/scripts/deliver_ai_android.py`. Cele două distribuții nu își curăță
 reciproc instalatoarele sau checksum-urile din Download.
 
-## Instalarea la cerere
+## Instalarea din pachetele APK
 
-APK-ul nu include binare, CEF sau interfața proprietară Ziva; totul se descarcă
-la instalare, direct de la furnizor. Ambele descărcări sunt opționale și sunt
-verificate înainte de activare.
+Distribuția `ziva-preview` include arhivele oficiale Ziva și Godot direct în
+APK, plus un repository Debian offline. Instalarea nu mai descarcă binare, CEF,
+interfața proprietară sau biblioteci GUI. Fiecare arhivă este verificată înainte
+de activare. Build-ul `standard` nu conține aceste fișiere.
 
 | Componentă | Arhivă | SHA-256 arhivă | Conținut verificat |
 | --- | --- | --- | --- |
@@ -244,9 +245,9 @@ este păstrată până la succes, iar un eșec nu atinge datele Ziva.
 Godot se extrage dintr-un singur membru fix al arhivei oficiale, cu hash și
 dimensiune verificate, apoi primește drept de execuție. Ambele instalatoare
 refuză un root simbolic, o versiune care iese din director și spațiul insuficient.
-Cerința de spațiu acoperă arhivele, conținutul dezarhivat, o eventuală instalare
-veche păstrată temporar și o marjă; în practică sunt necesari aproximativ 1,1 GB
-la instalare. Descărcările sunt de circa 305 MB.
+Cerința de spațiu acoperă arhivele temporare, conținutul dezarhivat, o eventuală
+instalare veche păstrată temporar și o marjă; implementarea curentă cere cel
+puțin 2 GB liberi la instalarea Ziva. Traficul de instalare este zero.
 
 După instalare, la fiecare proiect, serviciul copiază conținutul runtime-ului
 verificat în directorul privat `user://ziva/runtime/v3.3.3` al proiectului, ca
@@ -261,9 +262,10 @@ Un `active.json` vechi (de exemplu v3.3.2) nu blochează migrarea: versiunea
 fixată în aplicație are prioritate când este mai nouă, iar instalarea veche
 rămâne neatinsă până la o activare reușită.
 
-Licența Ziva este proprietară. Descărcarea opțională nu acordă drepturi de
-redistribuire a binarului într-un APK; pentru o distribuție care îl include este
-necesară autorizarea furnizorului.
+Licența Ziva este proprietară. Aceste arhive sunt împachetate exclusiv în
+build-ul personal, necomercial, cerut de utilizator; includerea lor nu acordă
+drepturi de redistribuire. Un APK public sau comercial care le conține necesită
+autorizarea scrisă a furnizorului.
 
 ## Pornirea editorului oficial
 

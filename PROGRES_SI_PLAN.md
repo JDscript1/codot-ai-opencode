@@ -64,6 +64,66 @@ controlul OpenAI; dacă spinnerul persistă și în Incognito, fără adblock/VP
 problema este upstream sau ține de eligibilitatea contului, nu de listener-ul
 local.
 
+## AG-89 — pachete runtime incluse în APK și actualizare offline — 3.11.2026
+
+**Cerință.** Mediul minim să fie pregătit în APK, să nu mai fie descărcat la
+fiecare instalare, iar Setări să aibă jos secțiunea **Actualizare pachete**, cu
+consolă, buton de actualizare, anulare și copiere a rezultatului. Sunt vizate
+Linux/Debian, Node.js, utilitarele Debian, harness-ul Pi și, separat, runtime-ul
+Ziva plus Godot.
+
+**Implementat în surse.**
+
+- `tools/embedded-runtime/packages.py` descarcă numai la build, verifică SHA-256
+  și împachetează în APK Node.js 22.19.0, Pi 1.5.0 și un repository apt plat cu
+  dependențele Debian arm64. `standard` include mediul comun; `ziva-preview`
+  include suplimentar addon-ul, runtime-ul CEF, `zivacode`, Godot 4.7.2 Linux
+  ARM64 și bibliotecile GUI.
+- `packages.json` fixează URL-urile, dimensiunile și hash-urile. Rezolvarea
+  Debian pornește de la statusul exact al rootfs-ului și păstrează `Multi-Arch`,
+  astfel încât apt poate instala offline inclusiv `perl:any`.
+- `AIPackageManager` copiază numai active verificate pe hash, extrage Node/Pi
+  prin tar, instalează repository-ul apt local și refuză pachetele lipsă. Nu
+  există `AIDownload`, `npm install` sau sursă de rețea în fluxul Ziva/Pi.
+- Pi folosește direct `node_modules` din arhiva APK. Ziva folosește arhivele
+  oficiale deja fixate, iar dependențele sunt verificate cu `ldd` după instalarea
+  offline. Punțile rămân în Kotlin; uneltele și sesiunea Pi nu sunt rescrise.
+- Setări → **Actualizare pachete** este ultimul tab. Are consolă `CodeEdit`
+  mărginită, actualizare, anulare și **Copiază rezultatul**. Jobul rulează în
+  serviciul foreground existent, raportează output-ul și reia afișarea ultimului
+  rezultat după redeschidere.
+- Baza Debian este reconstruită atomic numai când hash-ul din APK se schimbă
+  sau verificarea eșuează; `/root/.pi` este păstrat. Pi și Ziva trebuie oprite
+  înainte de actualizare, iar auto-pornirea Ziva este suspendată în timpul ei.
+- CI verifică manifestul, fiecare dimensiune/hash, prezența pachetelor Ziva
+  exclusiv în distribuția Ziva și clasa `AIPackageManager` în DEX.
+
+**Verificat local.** `gdparse` a trecut pe `panel.gd` și fixture-ul de test;
+toate testele Python relevante au trecut, inclusiv noile cazuri pentru versiuni
+Debian, alternative, dependențe tranzitive, `Multi-Arch` și sumele din
+repository. Ambele seturi au fost generate local: `debian-offline.zip` are
+35.417.215 bytes pentru `standard` și 87.882.286 bytes pentru `ziva-preview`.
+
+- Am extras rootfs-ul Debian oficial într-un director de test și am rulat apt
+  prin PRoot: cele 53 de pachete comune s-au instalat offline din `file:`;
+  `git`, `xz`, Python și ripgrep au răspuns cu versiunile așteptate.
+- Am instalat offline pachetele Ziva, am extras arhivele oficiale și am rulat
+  `zivacode --version` = `v3.3.3`, `godot --version` =
+  `4.7.2.stable.official.ed1daf0bf`; `ldd` nu a raportat biblioteci lipsă.
+- Node din arhiva APK a răspuns `v22.19.0`; Pi a răspuns `1.5.0`, iar RPC-ul
+  `get_state` a returnat `success:true` prin PRoot.
+
+**Neefectuat încă.** Compilarea celor două APK-uri, randarea CI a tabului,
+instalarea pe telefon și proba fără rețea pe APK nu erau încheiate la momentul
+acestei note. Acestea nu se declară verificate până la rezultatele workflow-ului.
+Dimensiunea livrată va crește substanțial, în special pentru Ziva. Licența Ziva
+este proprietară; arhivele sunt doar în build-ul personal, necomercial, fără a
+pretinde drept de redistribuire.
+
+Jurnal: 3.11.2026 — AG-89, pachetele runtime sunt generate în APK, instalarea
+Pi/Ziva nu mai descarcă, iar Setări are consola de actualizare. Urmează CI,
+APK-urile și proba Android.
+
 ## AG-87 — Pi deține uneltele, sesiunea și contextul — 3.11.2026
 
 **Cerință.** Harness-ul Pi trebuie folosit nativ pentru unelte, context, memorie

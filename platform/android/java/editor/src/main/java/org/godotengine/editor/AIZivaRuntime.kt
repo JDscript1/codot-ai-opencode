@@ -104,10 +104,12 @@ object AIZivaRuntime {
     }
     private fun reconcile(activity: Activity) {
         if (owners.isEmpty()) return
+        if (AILinuxRuntime.packageJob(activity).isNotEmpty()) return
         val target = owners[activity]?.takeIf { it.isNotEmpty() } ?: owners.values.firstOrNull { it.isNotEmpty() }.orEmpty()
         if (target != project) { project = target; attempts = 0; pending = 0 }
         val runtime = AILinuxRuntime.core(activity)
         if (!runtime.state().optBoolean("ready")) {
+            if (AILinuxRuntime.packageJob(activity).isNotEmpty()) return
             if (prepareJob.isNotEmpty()) {
                 val job = JSONObject(AILinuxRuntime.command("poll", JSONObject().put("id", prepareJob).toString()))
                 if (job.optString("status") in listOf("queued", "running")) return

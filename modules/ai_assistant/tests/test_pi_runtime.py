@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[3]
 PI = ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIPiRuntime.kt"
 PANEL = ROOT / "modules/ai_assistant/runtime/panel.gd"
 MCP = ROOT / "modules/ai_assistant/runtime/godot_mcp.gd"
+PACKAGES = ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIPackageManager.kt"
 
 
 class PiRuntimeTests(unittest.TestCase):
@@ -19,6 +20,26 @@ class PiRuntimeTests(unittest.TestCase):
         self.assertIn('"--mode", "rpc"', self.source)
         self.assertIn('"--no-approve"', self.source)
         self.assertIn('"PI_CODING_AGENT_DIR"', self.source)
+
+    def test_pi_install_is_offline_and_package_backed(self):
+        self.assertNotIn("npm install", self.source)
+        self.assertNotIn("preparePackageNetwork", self.source)
+        self.assertIn("AIPackageManager.installPi", self.source)
+        packages = PACKAGES.read_text()
+        self.assertIn('const val MANIFEST_ASSET = "$ASSET_DIRECTORY/manifest.json"', packages)
+        self.assertIn("tar -xJf", packages)
+        self.assertIn("tar -xzf", packages)
+        self.assertIn("copyAsset(context, manifest", packages)
+        self.assertNotIn("AIDownload", packages)
+
+    def test_settings_expose_the_bounded_package_console(self):
+        panel = PANEL.read_text()
+        self.assertIn('_tab("Actualizare pachete", "packages")', panel)
+        self.assertIn("func _build_packages", panel)
+        self.assertIn("func _packages_update", panel)
+        self.assertIn("func _packages_cancel", panel)
+        self.assertIn('_runtime_request("packages_poll"', panel)
+        self.assertIn("DisplayServer.clipboard_set(package_console.text)", panel)
 
     def test_mcp_allows_human_approval_time(self):
         self.assertIn('.put("timeout", 3600)', self.source)

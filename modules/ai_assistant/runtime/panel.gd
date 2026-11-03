@@ -177,6 +177,16 @@ var journal_rendered_revision = -1
 var journal_rendered_query = ""
 var journal_last_render = 0
 var journal_refresh_pending = false
+var package_console: CodeEdit
+var package_status: Label
+var package_details: Label
+var package_update: Button
+var package_cancel: Button
+var package_copy: Button
+var package_job = ""
+var package_running = false
+var package_poll_clock = 0.0
+var package_last_state: Dictionary = {}
 var preview_requested = false
 var turn_has_mutations = false
 var verification_tools: Array = []
@@ -840,12 +850,140 @@ func _build_settings() -> void:
 		play_form[field[0]].text = str(preferences.get("play_" + field[0], "180" if field[0] == "seconds" else ("30" if field[0] == "steps" else "")))
 	_button(play_tab, "Salvează playtesting", _save_preferences)
 	_label(play_tab, "Capturile și inputul privesc jocul lansat din acest fork, prin debugger. Dovezile sunt păstrate local pentru proiect.")
+	var packages_tab = _tab("Actualizare pachete", "packages")
+	_build_packages(packages_tab)
 	_search_settings("")
 	for section in forms:
 		var fields: Dictionary = forms[section]
 		fields["editing"] = ""
 	voice_form["backend"].item_selected.connect(func(_index: int) -> void: _voice_fields())
 	_voice_fields()
+
+func _build_packages(parent: Node) -> void:
+	var scale = EditorInterface.get_editor_scale()
+	_label(parent, "Pachetele minime sunt incluse direct în APK: Debian, Node.js, harness-ul Pi, iar în ediția Ziva și runtime-ul Ziva plus Godot Linux. Actualizarea nu descarcă pachete de pe internet.")
+	package_status = _label(parent, "Verific pachetele runtime…")
+	package_status.add_theme_color_override("font_color", Color("c8d4ea"))
+	package_details = _label(parent, "")
+	package_details.add_theme_color_override("font_color", Color("9fabc2"))
+	var actions = _row(parent)
+	package_update = _primary_button(actions, "Actualizează", _packages_update)
+	package_update.tooltip_text = "Reconstruiește mediul din arhivele semnate în APK, păstrând proiectele și configurația."
+	package_cancel = _button(actions, "Anulează", _packages_cancel)
+	package_cancel.hide()
+	package_copy = _button(actions, "Copiază rezultatul", func() -> void:
+		if package_console != null: DisplayServer.clipboard_set(package_console.text))
+	package_copy.tooltip_text = "Copiază tot rezultatul actualizării."
+	_label(parent, "Consolă actualizare")
+	package_console = CodeEdit.new()
+	package_console.editable = false
+	package_console.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	package_console.gutters_draw_line_numbers = false
+	package_console.custom_minimum_size.y = 360 * scale
+	package_console.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	package_console.add_theme_font_size_override("font_size", int(12 * scale))
+	package_console.placeholder_text = "Rezultatul verificării și al actualizării apare aici."
+	parent.add_child(package_console)
+	_packages_refresh.call_deferred(true)
+
+func _runtime_request(action: String, args: Dictionary = {}) -> Dictionary:
+	var runtime = _ziva_runtime_node()
+	if runtime == null or not runtime.has_method("linux_runtime_request"):
+		return Common.failure("Pachetele runtime sunt disponibile în editorul Android actualizat.", "runtime_unavailable")
+	var response: Variant = runtime.call("linux_runtime_request", action, args)
+	return response if response is Dictionary else Common.failure("Răspuns runtime invalid.", "runtime_protocol_error")
+
+func _packages_refresh(load_last: bool = true) -> void:
+	if package_status == null: return
+	var state = _runtime_request("packages_status")
+	if not state.get("ok", false):
+		package_status.text = str(state.get("error", "Pachetele runtime nu sunt disponibile."))
+		package_details.text = ""
+		if package_update != null: package_update.disabled = true
+		return
+	_packages_render(state)
+	var active = str(state.get("active_job", ""))
+	if not active.is_empty():
+		package_job = active
+		package_running = true
+		_packages_poll()
+	elif load_last:
+		var last = str(state.get("last_job", ""))
+		if not last.is_empty() and (package_console == null or package_console.text.is_empty()):
+			package_job = last
+			_packages_poll()
+
+func _packages_render(state: Dictionary) -> void:
+	if package_status == null or state.is_empty(): return
+	package_last_state = state.duplicate(true)
+	var linux: Dictionary = state.get("linux", {}) if state.get("linux", {}) is Dictionary else {}
+	var debian: Dictionary = state.get("debian", {}) if state.get("debian", {}) is Dictionary else {}
+	var node: Dictionary = state.get("node", {}) if state.get("node", {}) is Dictionary else {}
+	var pi: Dictionary = state.get("pi", {}) if state.get("pi", {}) is Dictionary else {}
+	var ziva: Dictionary = state.get("ziva", {}) if state.get("ziva", {}) is Dictionary else {}
+	var godot: Dictionary = state.get("godot", {}) if state.get("godot", {}) is Dictionary else {}
+	var current = bool(state.get("all_ready", false))
+	package_status.text = "Toate pachetele sunt instalate și verificate." if current else "Pachetele runtime necesită actualizare sau verificare."
+	var details = "Debian %s · Node.js %s · Pi %s · %d pachete Debian" % [
+		str(linux.get("release", "?")), str(node.get("version", "?")), str(pi.get("version", "?")), int(debian.get("packages", 0))]
+	if bool(ziva.get("bundled", false)):
+		details += " · Ziva %s · Godot %s" % [str(ziva.get("version", "?")), str(godot.get("version", "?"))]
+	details += "\nLinux %s · Debian %s · Pi %s" % [
+		"OK" if bool(linux.get("ready", false)) and bool(linux.get("current", false)) else "lipsește",
+		"OK" if bool(debian.get("ready", false)) else "lipsește",
+		"OK" if bool(pi.get("ready", false)) else "lipsește"]
+	if bool(ziva.get("bundled", false)):
+		details += " · Ziva %s · Godot %s" % ["OK" if bool(ziva.get("ready", false)) else "lipsește", "OK" if bool(godot.get("ready", false)) else "lipsește"]
+	package_details.text = details
+	package_update.disabled = package_running or not bool(state.get("bundled", false))
+	package_update.text = "Actualizează" if bool(state.get("all_ready", false)) else "Instalează pachetele"
+	package_cancel.visible = package_running
+	package_copy.disabled = package_console == null or package_console.text.is_empty()
+
+func _packages_update() -> void:
+	if package_running: return
+	var response = _runtime_request("packages_update")
+	if not response.get("ok", false):
+		if package_console != null: package_console.text = _redact(str(response.get("error", "Actualizarea nu a pornit.")))
+		_packages_refresh(false)
+		return
+	package_job = str(response.get("id", ""))
+	package_running = not package_job.is_empty()
+	if package_console != null: package_console.text = "Actualizarea pachetelor a pornit.\n"
+	package_cancel.visible = package_running
+	package_update.disabled = true
+
+func _packages_cancel() -> void:
+	if package_job.is_empty(): return
+	_runtime_request("packages_cancel", {"id": package_job})
+
+func _packages_poll() -> void:
+	if package_job.is_empty(): return
+	var response = _runtime_request("packages_poll", {"id": package_job})
+	if not response.get("ok", false):
+		package_running = false
+		package_job = ""
+		if package_console != null: package_console.text = _redact(str(response.get("error", "Sarcina de actualizare nu poate fi citită.")))
+		_packages_refresh(false)
+		return
+	var output = _redact(str(response.get("output", "")))
+	var error = _redact(str(response.get("error", "")))
+	if not error.is_empty(): output += ("\n" if not output.ends_with("\n") else "") + "EROARE: " + error + "\n"
+	if package_console != null and package_console.text != output:
+		package_console.text = output
+		package_console.scroll_vertical = package_console.get_line_count()
+	var status = str(response.get("status", ""))
+	if status in ["completed", "failed", "cancelled", "interrupted"]:
+		package_running = false
+		package_job = ""
+		package_cancel.hide()
+		package_update.disabled = false
+		if response.get("result") is Dictionary: _packages_render(response["result"])
+		if integrations != null and integrations.linux != null:
+			integrations.linux.refresh()
+			_refresh_linux_card()
+		if pi_session != null: pi_session.refresh()
+		_packages_refresh.call_deferred(false)
 
 func _control_preference(key: String, value: Variant) -> void:
 	config["preferences"][key] = value
@@ -4280,6 +4418,11 @@ func _process(_delta: float) -> void:
 		chat.set_working(busy or (speech != null and (speech.listening or speech.transcribing)))
 		if busy: chat._follow()
 	if settings_window != null and settings_window.visible: _update_settings_controls()
+	if package_running and settings_window != null and settings_window.visible:
+		package_poll_clock += _delta
+		if package_poll_clock >= 0.5:
+			package_poll_clock = 0.0
+			_packages_poll()
 	if not project_manager_mode and integrations != null and integrations.termux != null and not integrations.linux.state.get("packaged", false):
 		var backend = integrations.termux
 		var viewing = settings_window != null and settings_window.visible
@@ -4954,6 +5097,7 @@ func _select_settings(tab: int) -> void:
 	if project_manager_mode and not tab in [section_tabs["general"], section_tabs["providers"], section_tabs["accounts"], section_tabs["journal"], section_tabs["voice"]]: tab = section_tabs["general"]
 	settings_tabs.current_tab = tab
 	if tab == section_tabs.get("journal", -1): _refresh_journal(true)
+	if tab == section_tabs.get("packages", -1): _packages_refresh(true)
 	for index in range(settings_navigation.item_count):
 		if int(settings_navigation.get_item_metadata(index)) == tab:
 			settings_navigation.select(index)

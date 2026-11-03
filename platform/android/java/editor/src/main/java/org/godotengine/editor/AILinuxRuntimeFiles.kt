@@ -86,15 +86,29 @@ class AILinuxRuntimeFiles(
     fun install(dns: List<String>) {
         check(!root.exists()) { "Linux este deja instalat. Folosește Verifică." }
         check(base.isDirectory || base.mkdirs())
-        val spec = asset("godot_ai/linux/package.json").bufferedReader().use { JSONObject(it.readText()) }
+        val spec = packageSpec()
         check(spec.getInt("schema") == 1 && spec.getString("architecture") == "arm64") { "Pachet Linux incompatibil." }
         for (orphan in base.listFiles().orEmpty()) {
             if (orphan.name.matches(Regex("install-[a-f0-9-]{36}"))) deleteTree(orphan)
         }
         val needed = spec.getLong("unpacked_bytes") + spec.getLong("size") + 128L * 1024 * 1024
         check(base.usableSpace >= needed) { "Spațiu insuficient pentru Linux: sunt necesari ${needed / (1024 * 1024)} MB." }
-        val archive = File(base, "rootfs-install.zip")
         val staging = File(base, "install-" + UUID.randomUUID())
+        try {
+            stageRootfs(spec, staging)
+            configure(staging, dns)
+            check(staging.renameTo(root)) { "Instalarea Linux nu a putut fi activată." }
+            writeJson(stateFile, JSONObject().put("ready", false).put("distribution", spec.getString("distribution"))
+                .put("release", spec.getString("release")).put("base_sha256", spec.getString("source_sha256")).put("tools", JSONObject()))
+            verify()
+        } finally { deleteTree(staging) }
+    }
+
+    private fun packageSpec(): JSONObject =
+        asset("godot_ai/linux/package.json").bufferedReader().use { JSONObject(it.readText()) }
+
+    private fun stageRootfs(spec: JSONObject, staging: File) {
+        val archive = File(base, "rootfs-install.zip")
         try {
             progress("Pregătesc Linux în memoria aplicației…")
             asset("godot_ai/linux/rootfs.zip").use { input -> archive.outputStream().use { output ->
@@ -104,12 +118,104 @@ class AILinuxRuntimeFiles(
             } }
             check(archive.length() == spec.getLong("size") && sha(archive) == spec.getString("sha256")) { "Pachet Linux corupt." }
             unpack(archive, staging)
+        } finally { archive.delete() }
+    }
+
+    /**
+     * Apply the Debian base pinned by this APK. A newer APK replaces the base
+     * filesystem atomically while retaining Pi configuration and sessions.
+     * External Godot projects live under /workspace bindings and are untouched.
+     */
+    fun ensureCurrentBase(dns: List<String>): JSONObject {
+        if (!root.exists()) {
+            install(dns)
+            return state()
+        }
+        check(!Files.isSymbolicLink(root.toPath()) && File(root, "etc/os-release").isFile) { "Runtime-ul Linux este corupt." }
+        val spec = packageSpec()
+        val current = state()
+        if (current.optString("base_sha256") == spec.getString("source_sha256")) {
+            return try { verify() } catch (error: Exception) {
+                progress("Runtime-ul Linux nu a trecut verificarea; reconstruiesc baza din APK…")
+                rebuildBase(spec, dns)
+            }
+        }
+        progress("Actualizez baza Debian din APK…")
+        return rebuildBase(spec, dns)
+    }
+
+    private fun rebuildBase(spec: JSONObject, dns: List<String>): JSONObject {
+        val staging = File(base, "install-" + UUID.randomUUID())
+        val previous = File(base, "previous-" + UUID.randomUUID())
+        val oldState = readJson(stateFile)
+        val preserved = File(root, "root/.pi")
+        val preserveCopy = File(base, "preserve-" + UUID.randomUUID())
+        val needed = spec.getLong("unpacked_bytes") + spec.getLong("size") + 256L * 1024 * 1024
+        check(base.usableSpace >= needed) { "Spațiu insuficient pentru actualizarea Linux: sunt necesari ${needed / (1024 * 1024)} MB." }
+        try {
+            stageRootfs(spec, staging)
             configure(staging, dns)
-            check(staging.renameTo(root)) { "Instalarea Linux nu a putut fi activată." }
-            writeJson(stateFile, JSONObject().put("ready", false).put("distribution", spec.getString("distribution"))
-                .put("release", spec.getString("release")).put("base_sha256", spec.getString("source_sha256")).put("tools", JSONObject()))
-            verify()
-        } finally { archive.delete(); deleteTree(staging) }
+            if (preserved.isDirectory && !Files.isSymbolicLink(preserved.toPath())) {
+                progress("Păstrez configurația și sesiunile Pi…")
+                copyTree(preserved, File(preserveCopy, "root/.pi"))
+            }
+            check(root.renameTo(previous)) { "Runtime-ul Linux vechi nu poate fi păstrat temporar." }
+            if (!staging.renameTo(root)) {
+                check(previous.renameTo(root)) { "Runtime-ul Linux trebuie reparat." }
+                error("Noua bază Linux nu a putut fi activată.")
+            }
+            return try {
+                if (preserveCopy.isDirectory) {
+                    val target = File(root, "root/.pi")
+                    deleteTree(target)
+                    check(target.parentFile!!.isDirectory || target.parentFile!!.mkdirs())
+                    copyTree(File(preserveCopy, "root/.pi"), target)
+                }
+                writeJson(stateFile, JSONObject().put("ready", false).put("distribution", spec.getString("distribution"))
+                    .put("release", spec.getString("release")).put("base_sha256", spec.getString("source_sha256")).put("tools", JSONObject()))
+                val verified = verify()
+                deleteTree(previous)
+                verified
+            } catch (error: Exception) {
+                deleteTree(root)
+                check(previous.renameTo(root)) { "Baza Linux anterioară trebuie restaurată manual." }
+                writeJson(stateFile, oldState)
+                throw error
+            }
+        } finally {
+            deleteTree(staging)
+            deleteTree(preserveCopy)
+        }
+    }
+
+    private fun copyTree(source: File, destination: File) {
+        val sourcePath = source.toPath()
+        check(!Files.isSymbolicLink(sourcePath) && source.isDirectory)
+        Files.walkFileTree(sourcePath, object : SimpleFileVisitor<Path>() {
+            override fun preVisitDirectory(path: Path, attrs: BasicFileAttributes): FileVisitResult {
+                stopCheck()
+                val target = destination.toPath().resolve(sourcePath.relativize(path).toString())
+                check(target.startsWith(destination.toPath()))
+                Files.createDirectories(target)
+                return FileVisitResult.CONTINUE
+            }
+            override fun visitFile(path: Path, attrs: BasicFileAttributes): FileVisitResult {
+                stopCheck()
+                val target = destination.toPath().resolve(sourcePath.relativize(path).toString())
+                check(target.startsWith(destination.toPath()))
+                if (Files.isSymbolicLink(path)) {
+                    val link = Files.readSymbolicLink(path)
+                    check(!link.isAbsolute && target.parent.resolve(link).normalize().startsWith(destination.toPath())) {
+                        "Configurația Pi conține o legătură nesigură."
+                    }
+                    Files.createSymbolicLink(target, link)
+                } else {
+                    Files.copy(path, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.COPY_ATTRIBUTES, LinkOption.NOFOLLOW_LINKS)
+                }
+                return FileVisitResult.CONTINUE
+            }
+        })
     }
 
     /** Files first, links last. Never extract data through an archive-created symlink. */

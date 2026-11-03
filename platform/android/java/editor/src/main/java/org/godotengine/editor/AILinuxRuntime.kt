@@ -51,13 +51,50 @@ object AILinuxRuntime {
     }
     private fun failure(message: String, code: String = "runtime_error") = JSONObject().put("ok", false).put("error", message).put("code", code)
 
+    internal fun packageJob(context: Context): String {
+        val files = File(directory(context), "jobs").listFiles()?.filter { it.extension == "json" }.orEmpty()
+        for (file in files.sortedByDescending { it.lastModified() }) {
+            val job = AILinuxRuntimeFiles.readJson(file)
+            recoverStale(job, file)
+            if (job.optString("kind") == "packages_update" && job.optString("status") in listOf("queued", "running")) return job.optString("id")
+        }
+        return ""
+    }
+
+    internal fun latestPackageJob(context: Context): String {
+        val files = File(directory(context), "jobs").listFiles()?.filter { it.extension == "json" }.orEmpty()
+        for (file in files.sortedByDescending { it.lastModified() }) {
+            val job = AILinuxRuntimeFiles.readJson(file)
+            if (job.optString("kind") == "packages_update") return job.optString("id")
+        }
+        return ""
+    }
+
     @JvmStatic @Synchronized fun command(action: String, text: String): String {
         val current = context ?: return failure("Editorul Android nu este activ.").toString()
         if (Build.VERSION.SDK_INT < 29 || !Build.SUPPORTED_ABIS.contains("arm64-v8a")) return failure("Runtime Linux necesită Android 10+ ARM64.", "unsupported_platform").toString()
         return try {
             val arguments = JSONObject(text)
+            if ((action in setOf("pi_install", "pi_start", "ziva_install", "ziva_update", "ziva_restart")) && packageJob(current).isNotEmpty()) {
+                return failure("Actualizarea pachetelor runtime este în lucru. Așteaptă finalizarea.", "packages_busy").toString()
+            }
             if (action.startsWith("ziva_")) return AIZivaRuntime.command(current, action, arguments).toString()
             if (action.startsWith("pi_")) return AIPiRuntime.command(current, action, arguments).toString()
+            if (action == "packages_status") return AIPackageManager.status(current).toString()
+            if (action == "packages_poll") {
+                val id = arguments.getString("id"); check(validId(id)) { "ID sarcina invalid." }
+                val file = jobFile(current, id); check(file.isFile) { "Sarcina nu există." }
+                val job = AILinuxRuntimeFiles.readJson(file)
+                recoverStale(job, file)
+                check(job.optString("kind") == "packages_update") { "Sarcina nu este o actualizare de pachete." }
+                return job.put("ok", true).toString()
+            }
+            if (action == "packages_cancel") {
+                val id = arguments.getString("id"); check(validId(id)) { "ID sarcina invalid." }
+                val file = jobFile(current, id); check(file.isFile) { "Sarcina nu există." }
+                File(file.parentFile, "$id.cancel").writeText("cancel")
+                return JSONObject().put("ok", true).put("cancelling", true).toString()
+            }
             when (action) {
                 "status" -> {
                     val result = core(current).state().put("ok", true).put("supported", true)
@@ -94,6 +131,24 @@ object AILinuxRuntime {
                     try { current.startForegroundService(Intent(current, AILinuxRuntimeService::class.java).putExtra("job_id", id)) }
                     catch (error: Exception) {
                         job.put("status", "failed").put("error", "Serviciul Linux nu a pornit: ${error.javaClass.simpleName}")
+                        AILinuxRuntimeFiles.writeJson(jobFile(current, id), job); throw error
+                    }
+                    JSONObject().put("ok", true).put("id", id).put("status", "queued").toString()
+                }
+                "packages_update" -> {
+                    check(!AIZivaRuntime.isBusy(current)) { "Oprește Ziva înainte de actualizarea pachetelor." }
+                    check(!AIPiRuntime.isBusy()) { "Oprește sesiunea Pi înainte de actualizarea pachetelor." }
+                    val active = active(current)
+                    check(active.isEmpty()) { "O altă sarcină Linux este în lucru." }
+                    AIPackageManager.manifest(current)
+                    trimJobs(current)
+                    val id = UUID.randomUUID().toString()
+                    val job = JSONObject().put("id", id).put("kind", action).put("status", "queued").put("arguments", JSONObject())
+                        .put("created_at", System.currentTimeMillis()).put("heartbeat", System.currentTimeMillis()).put("output", "")
+                    AILinuxRuntimeFiles.writeJson(jobFile(current, id), job)
+                    try { current.startForegroundService(Intent(current, AILinuxRuntimeService::class.java).putExtra("job_id", id)) }
+                    catch (error: Exception) {
+                        job.put("status", "failed").put("error", "Serviciul runtime nu a pornit: ${error.javaClass.simpleName}")
                         AILinuxRuntimeFiles.writeJson(jobFile(current, id), job); throw error
                     }
                     JSONObject().put("ok", true).put("id", id).put("status", "queued").toString()
@@ -195,6 +250,14 @@ class AILinuxRuntimeService : Service() {
                 "tool_install" -> { AILinuxRuntime.preparePackageNetwork(this, runtime); runtime.installTool(args.getString("tool")) }
                 "execute" -> runtime.execute(args.getString("command"), File(args.getString("project_directory")), args.optInt("seconds", 120))
                 "uninstall" -> { runtime.uninstall(); runtime.state() }
+                "packages_update" -> AIPackageManager.update(this, runtime, { cancelled.get() || cancelFile.exists() }) { text ->
+                    synchronized(lock) {
+                        output.append(text).append('\n')
+                        if (output.length > AILinuxRuntimeFiles.MAX_LOG) { output.delete(0, output.length - AILinuxRuntimeFiles.MAX_LOG); job.put("truncated", true) }
+                        save()
+                    }
+                    getSystemService(NotificationManager::class.java).notify(7342, notification(text))
+                }
                 else -> error("Operație Linux necunoscută.")
             }
             synchronized(lock) { job.put("status", "completed").put("result", result) }
