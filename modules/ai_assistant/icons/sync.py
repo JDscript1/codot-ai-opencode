@@ -1,57 +1,120 @@
 """Vendor pinned upstream SVG artwork and embed it without runtime network access."""
-from concurrent.futures import ThreadPoolExecutor
+
 import hashlib
 import json
-from pathlib import Path
 import urllib.request
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 REVISIONS = {
-    'lobe': ('lobehub/lobe-icons', 'ab8cbcc6ce806b923c547628132957c8a8b61509'),
-    'lucide': ('lucide-icons/lucide', '20aef31db93fe4d9f398dbb15b120d99c48eef95'),
-    'ggml': ('ggml-org/llama.cpp', 'e3797b184d428c7a019362612b76971f60af6670'),
+    "lobe": ("lobehub/lobe-icons", "ab8cbcc6ce806b923c547628132957c8a8b61509"),
+    "lucide": ("lucide-icons/lucide", "20aef31db93fe4d9f398dbb15b120d99c48eef95"),
+    "ggml": ("ggml-org/llama.cpp", "e3797b184d428c7a019362612b76971f60af6670"),
 }
 BRANDS = {
-    'openai': 'openai', 'meta': 'meta-color', 'anthropic': 'anthropic', 'gemini': 'gemini-color',
-    'deepseek': 'deepseek-color', 'openrouter': 'openrouter', 'opencode': 'opencode', 'qwen': 'qwen-color',
-    'kimi': 'kimi-color', 'mistral': 'mistral-color', 'groq': 'groq', 'xai': 'grok',
-    'zai': 'zai', 'minimax': 'minimax-color', 'nvidia': 'nvidia-color',
-    'siliconflow': 'siliconcloud-color', 'ollama': 'ollama', 'lmstudio': 'lmstudio',
-    'copilot': 'githubcopilot', 'github': 'github',
-    'meshy': 'meshy-color', 'tripo': 'tripo-color', 'comfyui': 'comfyui-color',
+    "openai": "openai",
+    "meta": "meta-color",
+    "anthropic": "anthropic",
+    "gemini": "gemini-color",
+    "deepseek": "deepseek-color",
+    "openrouter": "openrouter",
+    "opencode": "opencode",
+    "qwen": "qwen-color",
+    "kimi": "kimi-color",
+    "mistral": "mistral-color",
+    "groq": "groq",
+    "xai": "grok",
+    "zai": "zai",
+    "minimax": "minimax-color",
+    "nvidia": "nvidia-color",
+    "siliconflow": "siliconcloud-color",
+    "ollama": "ollama",
+    "lmstudio": "lmstudio",
+    "copilot": "githubcopilot",
+    "github": "github",
+    "meshy": "meshy-color",
+    "tripo": "tripo-color",
+    "comfyui": "comfyui-color",
 }
 ACTIONS = {
-    'Add': 'plus', 'ArrowUp': 'arrow-up', 'Stop': 'square', 'Microphone': 'mic',
-    'Menu': 'panel-left', 'Settings': 'settings', 'Expand': 'maximize', 'Collapse': 'minimize',
-    'Copy': 'copy', 'Retry': 'rotate-cw', 'More': 'ellipsis', 'Changes': 'file-diff',
-    'Close': 'x', 'Back': 'arrow-left', 'Check': 'check', 'Search': 'search',
-    'Attach': 'paperclip', 'Models': 'layers', 'Reasoning': 'brain', 'Auto': 'sparkles',
-    'Providers': 'blocks', 'Cloud': 'cloud', 'Accounts': 'badge-check', 'Local': 'monitor',
-    'Inspect': 'scan-search', 'Confirm': 'shield-check', 'Agent': 'bot', 'Plan': 'list-checks',
-    'MCP': 'plug', 'Generation': 'image', 'Automations': 'zap', 'Journal': 'notebook-text',
-    'Play': 'play', 'Favorite': 'star', 'Rename': 'pencil', 'Archive': 'archive',
-    'Export': 'upload', 'Delete': 'trash', 'File': 'file', 'Provider_custom': 'code-xml',
-    'Chat': 'message-circle', 'Skills': 'book-open-check', 'Integrations': 'puzzle', 'Sound': 'volume-2',
-    'Preview3D': 'box', 'Crop': 'crop', 'ArrowRight': 'arrow-right', 'Annotate': 'move-up-right',
-    'Grid': 'grid-3x3', 'Light': 'sun', 'Wireframe': 'boxes', 'Reset': 'rotate-ccw',
-    'Compare': 'columns-2', 'Pin': 'pin', 'Animation': 'clapperboard', 'Undo': 'undo-2',
+    "Add": "plus",
+    "ArrowUp": "arrow-up",
+    "Stop": "square",
+    "Microphone": "mic",
+    "Menu": "panel-left",
+    "Settings": "settings",
+    "Expand": "maximize",
+    "Collapse": "minimize",
+    "Copy": "copy",
+    "Retry": "rotate-cw",
+    "More": "ellipsis",
+    "Changes": "file-diff",
+    "Close": "x",
+    "Back": "arrow-left",
+    "Check": "check",
+    "Search": "search",
+    "Attach": "paperclip",
+    "Models": "layers",
+    "Reasoning": "brain",
+    "Auto": "sparkles",
+    "Providers": "blocks",
+    "Cloud": "cloud",
+    "Accounts": "badge-check",
+    "Local": "monitor",
+    "Inspect": "scan-search",
+    "Confirm": "shield-check",
+    "Agent": "bot",
+    "Plan": "list-checks",
+    "MCP": "plug",
+    "Generation": "image",
+    "Automations": "zap",
+    "Journal": "notebook-text",
+    "Play": "play",
+    "Favorite": "star",
+    "Rename": "pencil",
+    "Archive": "archive",
+    "Export": "upload",
+    "Delete": "trash",
+    "File": "file",
+    "Provider_custom": "code-xml",
+    "Chat": "message-circle",
+    "Skills": "book-open-check",
+    "Integrations": "puzzle",
+    "Sound": "volume-2",
+    "Preview3D": "box",
+    "Crop": "crop",
+    "ArrowRight": "arrow-right",
+    "Annotate": "move-up-right",
+    "Grid": "grid-3x3",
+    "Light": "sun",
+    "Wireframe": "boxes",
+    "Reset": "rotate-ccw",
+    "Compare": "columns-2",
+    "Pin": "pin",
+    "Animation": "clapperboard",
+    "Undo": "undo-2",
 }
 
 
 def download(entry):
     key, source, path = entry
     repo, revision = REVISIONS[source]
-    url = f'https://raw.githubusercontent.com/{repo}/{revision}/{path}'
+    url = f"https://raw.githubusercontent.com/{repo}/{revision}/{path}"
     asset = ROOT / source / Path(path).name
-    previous = json.loads((ROOT / 'manifest.json').read_text()).get(key, {})
-    if asset.exists() and previous.get('url') == url and previous.get('sha256') == hashlib.sha256(asset.read_bytes()).hexdigest():
+    previous = json.loads((ROOT / "manifest.json").read_text()).get(key, {})
+    if (
+        asset.exists()
+        and previous.get("url") == url
+        and previous.get("sha256") == hashlib.sha256(asset.read_bytes()).hexdigest()
+    ):
         return key, asset, url, asset.read_bytes()
     try:
         with urllib.request.urlopen(url, timeout=45) as response:
             data = response.read()
     except Exception as error:
-        raise RuntimeError(f'Cannot download {key}: {url}') from error
+        raise RuntimeError(f"Cannot download {key}: {url}") from error
     asset = ROOT / source / Path(path).name
     asset.parent.mkdir(parents=True, exist_ok=True)
     asset.write_bytes(data)
@@ -59,36 +122,45 @@ def download(entry):
 
 
 def main():
-    entries = [(f'Provider_{key}', 'lobe', f'packages/static-svg/icons/{slug}.svg')
-               for key, slug in BRANDS.items()]
-    entries += [(key, 'lucide', f'icons/{slug}.svg') for key, slug in ACTIONS.items()]
-    entries.append(('Provider_llamacpp', 'ggml', 'media/llama1-icon-transparent.svg'))
-    entries.append(('Provider_omniroute', 'lucide', 'icons/route.svg'))
+    entries = [(f"Provider_{key}", "lobe", f"packages/static-svg/icons/{slug}.svg") for key, slug in BRANDS.items()]
+    entries += [(key, "lucide", f"icons/{slug}.svg") for key, slug in ACTIONS.items()]
+    entries.append(("Provider_llamacpp", "ggml", "media/llama1-icon-transparent.svg"))
+    entries.append(("Provider_omniroute", "lucide", "icons/route.svg"))
     for source, (repo, revision) in REVISIONS.items():
-        with urllib.request.urlopen(f'https://raw.githubusercontent.com/{repo}/{revision}/LICENSE', timeout=45) as response:
-            (ROOT / f'LICENSE-{source}').write_bytes(response.read())
+        with urllib.request.urlopen(
+            f"https://raw.githubusercontent.com/{repo}/{revision}/LICENSE", timeout=45
+        ) as response:
+            (ROOT / f"LICENSE-{source}").write_bytes(response.read())
     manifest, embedded = {}, {}
-    ET.register_namespace('', 'http://www.w3.org/2000/svg')
+    ET.register_namespace("", "http://www.w3.org/2000/svg")
     with ThreadPoolExecutor(max_workers=6) as pool:
         for key, asset, url, data in pool.map(download, entries):
             svg = ET.fromstring(data)
-            assert svg.tag.endswith('svg') and len(svg), key
-            assert not any(node.tag.endswith('script') for node in svg.iter()), key
-            assert not any(value.startswith(('http:', 'https:', 'file:'))
-                           for node in svg.iter() for attr, value in node.attrib.items()
-                           if attr.endswith('href')), key
-            svg.set('width', '24')
-            svg.set('height', '24')
-            embedded[key] = ET.tostring(svg, encoding='unicode')
-            manifest[key] = {'file': str(asset.relative_to(ROOT)), 'url': url,
-                             'sha256': hashlib.sha256(data).hexdigest()}
-    licenses = '\n\n'.join((ROOT / f'LICENSE-{s}').read_text() for s in REVISIONS)
-    header = '@tool\nextends RefCounted\n# Generated by icons/sync.py from pinned upstream SVGs.\n'
-    header += '\n'.join(('# ' + line).rstrip() for line in licenses.splitlines()) + '\n'
-    (ROOT.parent / 'runtime/icons.gd').write_text(header + 'const DATA = ' + json.dumps(embedded, ensure_ascii=False, indent=2) + '\n')
-    (ROOT / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    print(f'Vendored {len(embedded)} SVG icons with source hashes and licenses')
+            assert svg.tag.endswith("svg") and len(svg), key
+            assert not any(node.tag.endswith("script") for node in svg.iter()), key
+            assert not any(
+                value.startswith(("http:", "https:", "file:"))
+                for node in svg.iter()
+                for attr, value in node.attrib.items()
+                if attr.endswith("href")
+            ), key
+            svg.set("width", "24")
+            svg.set("height", "24")
+            embedded[key] = ET.tostring(svg, encoding="unicode")
+            manifest[key] = {
+                "file": str(asset.relative_to(ROOT)),
+                "url": url,
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+    licenses = "\n\n".join((ROOT / f"LICENSE-{s}").read_text() for s in REVISIONS)
+    header = "@tool\nextends RefCounted\n# Generated by icons/sync.py from pinned upstream SVGs.\n"
+    header += "\n".join(("# " + line).rstrip() for line in licenses.splitlines()) + "\n"
+    (ROOT.parent / "runtime/icons.gd").write_text(
+        header + "const DATA = " + json.dumps(embedded, ensure_ascii=False, indent=2) + "\n"
+    )
+    (ROOT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    print(f"Vendored {len(embedded)} SVG icons with source hashes and licenses")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
