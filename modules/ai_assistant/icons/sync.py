@@ -13,7 +13,7 @@ REVISIONS = {
     'ggml': ('ggml-org/llama.cpp', 'e3797b184d428c7a019362612b76971f60af6670'),
 }
 BRANDS = {
-    'openai': 'openai', 'anthropic': 'anthropic', 'gemini': 'gemini-color',
+    'openai': 'openai', 'meta': 'meta-color', 'anthropic': 'anthropic', 'gemini': 'gemini-color',
     'deepseek': 'deepseek-color', 'openrouter': 'openrouter', 'opencode': 'opencode', 'qwen': 'qwen-color',
     'kimi': 'kimi-color', 'mistral': 'mistral-color', 'groq': 'groq', 'xai': 'grok',
     'zai': 'zai', 'minimax': 'minimax-color', 'nvidia': 'nvidia-color',

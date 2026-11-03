@@ -11,7 +11,12 @@ tab at the top right of the editor, next to **Asset Store**. Its **Setări** but
 opens the same global configuration window.
 
 - **Furnizori:** select an issuer or paste a distinctive API key. Generic keys such
-  as `sk-...` require an issuer selection. OpenCode Zen uses one API key and its
+  as `sk-...` require an issuer selection. Meta Model API uses the official
+  `https://api.meta.ai/v1` Responses endpoint and API keys beginning with `LLM_`
+  (or the `MODEL_API_KEY` label). Its catalog shows Muse Wonder and text/agentic
+  Muse Spark models, including `muse-spark-1.3-contributor`. Contributor mode is
+  cheaper because Meta may use the prompts, code and responses for model
+  training; Standard mode is listed separately. OpenCode Zen uses one API key and its
   model catalog declares whether each model uses chat, Responses, Anthropic
   messages or Gemini generation; the harness routes the selected model automatically.
   OpenCode can restrict free-tier models to its own client, so another MCP/API
@@ -113,7 +118,10 @@ IP still matter, and reconnecting can change that IP. A model loaded in LM
 Studio does not by itself enable LAN serving. The editor does not silently scan
 or reconnect to a different discovered host using a saved token.
 
-Sources: [LM Studio LAN hosting](https://lmstudio.ai/docs/developer/core/server/serve-on-network),
+Sources: [Meta Model API](https://dev.meta.ai/docs/overview),
+[Meta Models](https://dev.meta.ai/docs/models),
+[Meta pricing](https://dev.meta.ai/docs/pricing-rate-limits),
+[LM Studio LAN hosting](https://lmstudio.ai/docs/developer/core/server/serve-on-network),
 [Ollama network binding](https://docs.ollama.com/faq#how-do-i-configure-ollama-server),
 [Ollama model catalog](https://docs.ollama.com/api/tags),
 [Ollama loaded models](https://docs.ollama.com/api/ps),

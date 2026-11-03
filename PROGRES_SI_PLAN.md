@@ -8,6 +8,45 @@ etapă importantă: implementare, verificare, compilare sau livrare. „Implemen
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
 
+## AG-86 — Meta Model API și Muse Spark ca furnizor de coding — 3.11.2026
+
+**Cerință.** Aplicația trebuie să ofere Meta ca furnizor AI separat, cu cheie API,
+astfel încât modelele Muse Spark pentru coding să poată rula prin același harness
+Pi ca ceilalți furnizori.
+
+**Implementat în surse.** Catalogul are acum **Meta Model API**, cloud, cu
+endpointul oficial `https://api.meta.ai/v1`, protocol Responses și prefix de
+cheie `LLM_`. Sunt acceptate atât cheia brută `LLM_…`, cât și etichetele
+`MODEL_API_KEY=…` și `META_API_KEY=…`.
+
+- Catalogul live `GET /v1/models` este filtrat la modelele text/agentice
+  `muse-spark-*` și `muse-wonder-*`; modelele Muse Image, Voice Transcribe și SAM
+  sunt excluse.
+- Metadatele publice sunt completate pentru contextul de 1.048.576 tokeni,
+  limita de 131.072 tokeni, input text/imagine, tool calling și reasoning.
+  `muse-spark-1.3-contributor` nu primește nivelul `max`; varianta Standard 1.3
+  îl primește.
+- Tarifele oficiale per 1M tokeni sunt păstrate în catalog: Muse Spark Standard
+  $1,25 intrare / $4,25 ieșire / $0,15 cache, Contributor $0,10 / $0,20 /
+  $0,002, iar Muse Wonder $4 / $20 / $0,20.
+- A fost adăugată pictograma Meta din setul Lobe, cu URL și SHA-256 fixate.
+- Profilul folosește Responses API, deci Pi îl mapează la `openai-responses`, iar
+  harness-ul nativ păstrează replay-ul reasoning-ului criptat.
+
+**Verificat local.** `gdparse` a trecut pe `providers.gd`, `icons.gd`,
+`chat_view.gd` și `test_runtime.gd`; `py_compile` a trecut pe fixture-ul HTTP.
+Testele adaugă detecția cheii, URL-ul oficial, filtrarea catalogului, limitele,
+capabilitățile, nivelurile de reasoning, tarifele și pictograma.
+
+**Neefectuat încă.** CI/APK, probe cu o cheie Meta reală și verificarea pe
+dispozitiv. Contributor mode implică folosirea conținutului pentru antrenarea
+modelelor Meta; utilizatorul trebuie să aleagă explicit varianta Contributor,
+nu este selectată automat de aplicație.
+
+Jurnal: 3.11.2026 — AG-86, Meta Model API adăugat cu Muse Spark Standard și
+Contributor, catalog Responses, tarife oficiale și pictogramă. Verificarea live
+rămâne de făcut.
+
 ## AG-85 — Agent AI pe Pi RPC, fără OpenCode TUI — 3.11.2026
 
 **Cerință.** Agentul propriu trebuie să folosească runtime-ul și harness-ul Pi,

@@ -89,6 +89,18 @@ class Fixtures(http.server.BaseHTTPRequestHandler):
                 {"id": "fixture-route-embedding", "type": "embedding"},
             ]} if valid else {"error": "Unauthorized"}, 200 if valid else 401)
             return
+        if location.path == "/meta/v1/models":
+            valid = self.headers.get("Authorization") == "Bearer meta-fixture-key"
+            self.reply({"object": "list", "data": [
+                {"id": "muse-spark-1.3-contributor", "object": "model", "owned_by": "meta"},
+                {"id": "muse-spark-1.3", "object": "model", "owned_by": "meta"},
+                {"id": "muse-spark-1.2", "object": "model", "owned_by": "meta"},
+                {"id": "muse-wonder-1.0", "object": "model", "owned_by": "meta"},
+                {"id": "muse-image-1.0", "object": "model", "owned_by": "meta"},
+                {"id": "muse-voice-transcribe-1.0", "object": "model", "owned_by": "meta"},
+                {"id": "sam-3.1", "object": "model", "owned_by": "meta"},
+            ]} if valid else {"error": {"message": "Invalid API key", "type": "authentication_error"}}, 200 if valid else 401)
+            return
         if location.path == "/opencode/zen/v1/models":
             valid = self.headers.get("Authorization") == "Bearer opencode-fixture-token"
             models = [

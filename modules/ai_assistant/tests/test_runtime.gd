@@ -410,6 +410,7 @@ func _run() -> void:
 		await _network_tests(node)
 		await _local_connection_tests(node)
 		await _omniroute_tests(node)
+		await _meta_tests(node)
 		await _opencode_tests(node)
 		await _cloud_generation_tests(node)
 		await _integration_tests(node)
@@ -1866,6 +1867,40 @@ func _omniroute_tests(node: Node) -> void:
 	check(listed["result"][0].get("context") == 262144 and listed["result"][0].get("capabilities", {}).get("vision", false) and listed["result"][0].get("capabilities", {}).get("tools", false), "OmniRoute catalog preserves context, image and tool capabilities")
 	var answer = await service.complete(profile, [{"role": "user", "content": "Ping"}], [], "fixture-route-chat", "", {})
 	check(answer.get("ok", false) and answer.get("message", {}).get("content") == "OmniRoute chat", "OmniRoute completes through the OpenAI-compatible chat endpoint with its saved key")
+
+func _meta_tests(node: Node) -> void:
+	var script = scripts["providers"]
+	check(script.detect("LLM_fixture-key").get("profile", {}).get("id") == "meta", "An LLM_ key selects Meta Model API")
+	check(script.detect("MODEL_API_KEY=LLM_fixture-key").get("profile", {}).get("id") == "meta", "The official MODEL_API_KEY label selects Meta Model API")
+	check(script.detect("META_API_KEY=LLM_fixture-key").get("profile", {}).get("id") == "meta", "META_API_KEY selects Meta Model API")
+	var meta_entry = {}
+	for entry in script.CATALOG:
+		if entry["id"] == "meta": meta_entry = entry
+	check(meta_entry.get("name") == "Meta Model API" and meta_entry.get("kind") == "responses" and meta_entry.get("url") == "https://api.meta.ai/v1", "Meta Model API is a cloud Responses provider with the official base URL")
+	check(script.endpoint({"issuer": "meta", "url": ""}).get("result") == "https://api.meta.ai/v1", "An empty Meta endpoint restores the official Model API URL")
+	check(script.model_target({"issuer": "meta", "kind": "responses", "url": "https://api.meta.ai/v1"}, "muse-spark-1.3-contributor").get("result", {}).get("kind") == "responses", "Meta coding models route through the Responses API")
+	var vault = FakeVault.new()
+	var service = script.new(node, vault)
+	var profile = {"id": "meta", "issuer": "meta", "name": "Meta Model API", "kind": "responses", "url": mock_url + "/meta/v1", "allow_http": true}
+	check(int((await service.list_models(profile)).get("status", 0)) == 401, "Meta model discovery exposes an invalid or missing API key")
+	vault.store("meta", "meta-fixture-key")
+	var listed = await service.list_models(profile)
+	check(listed.get("ok", false) and listed.get("result", []).size() == 4, "Meta discovery keeps Muse coding models and skips image, voice and segmentation models")
+	var by_id = {}
+	for model in listed.get("result", []): by_id[str(model.get("id", ""))] = model
+	var contributor = by_id.get("muse-spark-1.3-contributor", {})
+	var standard = by_id.get("muse-spark-1.3", {})
+	check(contributor.get("name") == "Muse Spark 1.3 Contributor" and contributor.get("context") == 1048576 and contributor.get("max_output_tokens") == 131072, "Muse Spark 1.3 Contributor keeps the published 1M context and output limits")
+	check(contributor.get("capabilities", {}).get("vision", false) and contributor.get("capabilities", {}).get("tools", false) and contributor.get("capabilities", {}).get("reasoning", false), "Meta coding models advertise image input, tools and reasoning")
+	check(not "max" in contributor.get("efforts", []) and "max" in standard.get("efforts", []), "Contributor mode excludes max reasoning while Standard Muse Spark 1.3 supports it")
+	check(is_equal_approx(contributor.get("pricing", {}).get("input", 0.0), 0.1) and is_equal_approx(contributor.get("pricing", {}).get("output", 0.0), 0.2) and is_equal_approx(contributor.get("pricing", {}).get("cached_input", 0.0), 0.002), "Muse Spark Contributor uses the official per-million token rates")
+	check(is_equal_approx(standard.get("pricing", {}).get("input", 0.0), 1.25) and is_equal_approx(standard.get("pricing", {}).get("output", 0.0), 4.25) and is_equal_approx(standard.get("pricing", {}).get("cached_input", 0.0), 0.15), "Muse Spark Standard uses the official per-million token rates")
+	check(is_equal_approx(by_id.get("muse-wonder-1.0", {}).get("pricing", {}).get("input", 0.0), 4.0) and is_equal_approx(by_id.get("muse-wonder-1.0", {}).get("pricing", {}).get("output", 0.0), 20.0), "Muse Wonder pricing is shown separately from Muse Spark")
+	var retained = listed.get("result", []).duplicate(true)
+	scripts["model_pricing"].new(node).apply({"issuer": "meta", "kind": "responses", "official_pricing": true}, retained)
+	check(not retained.is_empty() and retained[0].get("pricing", {}).get("input", 0.0) > 0, "Meta's documented token rates survive the pricing cache pass")
+	var icon_data: Dictionary = scripts["icons"].get_script_constant_map().get("DATA", {})
+	check(icon_data.has("Provider_meta"), "Meta Model API has a pinned provider icon")
 
 func _opencode_tests(node: Node) -> void:
 	var script = scripts["providers"]
