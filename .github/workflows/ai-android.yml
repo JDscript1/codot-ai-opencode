@@ -160,6 +160,8 @@ jobs:
                   assert hashlib.sha256(data).hexdigest() == spec['sha256'], entry
               assert 'lib/arm64-v8a/libai_proot.so' in archive.namelist()
               assert 'lib/arm64-v8a/libai_proot_loader.so' in archive.namelist()
+              names = set(archive.namelist())
+              print('Runtime assets: ' + ', '.join(sorted(name for name in names if name.startswith('assets/godot_ai/'))))
               package = json.loads(archive.read('assets/godot_ai/linux/package.json'))
               rootfs = archive.read('assets/godot_ai/linux/rootfs.zip')
               assert len(rootfs) == package['size'] and hashlib.sha256(rootfs).hexdigest() == package['sha256'], 'Linux filesystem differs from package manifest'
@@ -168,7 +170,6 @@ jobs:
               packages = json.loads(archive.read('assets/godot_ai/packages/manifest.json'))
               assert packages['distribution'] == distribution, 'Runtime package distribution differs from APK'
               assert packages['versions']['node'] == '22.19.0' and packages['versions']['pi'] == '1.5.0'
-              names = set(archive.namelist())
               for asset in packages['assets']:
                   path = 'assets/godot_ai/packages/' + asset['name']
                   data = archive.read(path)

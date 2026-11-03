@@ -5,6 +5,31 @@ plugins {
     id 'base'
 }
 
+abstract class PrepareAiPackageAssets extends DefaultTask {
+    @Input
+    abstract Property<String> getDistribution()
+
+    @InputDirectory
+    abstract DirectoryProperty getRuntimeTools()
+
+    @Internal
+    abstract DirectoryProperty getWorkDirectory()
+
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDirectory()
+
+    @TaskAction
+    void generate() {
+        def output = outputDirectory.get().asFile
+        project.delete(new File(output, 'godot_ai/packages'))
+        project.exec {
+            commandLine 'python3', new File(runtimeTools.get().asFile, 'packages.py'),
+                    '--work', workDirectory.get().asFile, '--output', output,
+                    '--distribution', distribution.get()
+        }
+    }
+}
+
 ext {
     // Retrieve the build number from the environment variable; default to 0 if none is specified.
     // The build number is added as a suffix to the version code for upload to the Google Play store.
@@ -75,6 +100,19 @@ if (!(aiDistribution in ["standard", "ziva-preview"])) {
     throw new GradleException("Unknown godotAiDistribution: " + aiDistribution)
 }
 def zivaPreview = aiDistribution == "ziva-preview"
+
+def prepareAiPackageAssets = tasks.register('prepareAiPackageAssets', PrepareAiPackageAssets) {
+    distribution.set(aiDistribution)
+    runtimeTools.set(file("$rootDir/../../../tools/embedded-runtime"))
+    workDirectory.set(layout.buildDirectory.dir('ai-runtime-build'))
+    outputDirectory.set(layout.buildDirectory.dir('generated/ai-package-assets'))
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(prepareAiPackageAssets, { it.outputDirectory })
+    }
+}
 
 android {
     compileSdkVersion versions.compileSdk
@@ -259,12 +297,9 @@ tasks.register('buildAiEmbeddedRuntime') {
             commandLine 'python3', new File(runtimeTools, 'rootfs.py'),
                     '--work', file("$buildDir/ai-runtime-build"), '--output', generated
         }
+        // Package assets have their own generated source directory, registered
+        // through the Android Components API so asset merging always sees them.
         delete new File(generated, 'assets/godot_ai/packages')
-        exec {
-            commandLine 'python3', new File(runtimeTools, 'packages.py'),
-                    '--work', file("$buildDir/ai-runtime-build"), '--output', generated,
-                    '--distribution', aiDistribution
-        }
     }
 }
 
