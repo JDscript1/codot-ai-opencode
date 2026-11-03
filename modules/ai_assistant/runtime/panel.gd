@@ -2686,6 +2686,13 @@ func _try_pi_turn(profile: Dictionary, model: String, effort: String, text: Stri
 	if current.get("running", false) and not reuse:
 		await _stop_pi_process()
 		current = pi_session.refresh()
+		if current.get("running", false):
+			pi_active = false
+			godot_mcp.set_read_only(false)
+			pi_route_signature = ""
+			_status("Pi nu s-a oprit pentru schimbarea sesiunii. Folosesc harness-ul nativ.")
+			_close_unanswered_calls()
+			return false
 	pi_active = true
 	pi_settled = false
 	pi_error = ""
