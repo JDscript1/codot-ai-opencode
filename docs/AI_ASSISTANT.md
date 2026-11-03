@@ -16,7 +16,8 @@ opens the same global configuration window.
   (or the `MODEL_API_KEY` label). Its catalog shows Muse Wonder and text/agentic
   Muse Spark models, including `muse-spark-1.3-contributor`. Contributor mode is
   cheaper because Meta may use the prompts, code and responses for model
-  training; Standard mode is listed separately. OpenCode Zen uses one API key and its
+  training; Standard mode is listed separately and Contributor is never selected
+  automatically. OpenCode Zen uses one API key and its
   model catalog declares whether each model uses chat, Responses, Anthropic
   messages or Gemini generation; the harness routes the selected model automatically.
   OpenCode can restrict free-tier models to its own client, so another MCP/API
@@ -48,10 +49,11 @@ opens the same global configuration window.
   [integrations](AI_INTEGRATIONS.md).
 - **AGENT.MD:** edit project memory in `AGENT.md`; existing `AGENTS.md` is preserved.
 
-The current APK is `a23d260`, including control/integrations/generation and
-[chat files, previews, editor control, Store and real diff](AI_CHAT_FILES_AND_EDITOR_CONTROL.md).
-It also includes the subsequent harness/local-connection fixes, activity drawer,
-3D preview controls, image-purpose rules and optional Termux/Blender setup.
+The current installers are built from `a7fb12d30d` and include the Pi RPC
+harness, Meta Model API (Muse Spark Standard and Contributor), control and
+integrations, [chat files, previews, editor control, Store and real
+diff](AI_CHAT_FILES_AND_EDITOR_CONTROL.md), activity drawer, 3D preview controls,
+image-purpose rules and optional Termux/Blender setup.
 The Android Blender card has one install action, automatic verification and agent
 activation, then a compact **Blender Active** status and **Uninstall Blender**.
 Diagnostics and worker output are in Journal; package removal preserves containers

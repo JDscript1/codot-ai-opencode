@@ -38,14 +38,46 @@ cheie `LLM_`. Sunt acceptate atât cheia brută `LLM_…`, cât și etichetele
 Testele adaugă detecția cheii, URL-ul oficial, filtrarea catalogului, limitele,
 capabilitățile, nivelurile de reasoning, tarifele și pictograma.
 
-**Neefectuat încă.** CI/APK, probe cu o cheie Meta reală și verificarea pe
-dispozitiv. Contributor mode implică folosirea conținutului pentru antrenarea
-modelelor Meta; utilizatorul trebuie să aleagă explicit varianta Contributor,
-nu este selectată automat de aplicație.
+**Verificat în CI și în APK.** Ambele workflow-uri au trecut integral:
+[41633357473](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41633357473)
+pentru instalatorul standard și
+[41633369836](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41633369836)
+pentru Ziva. Joburile `runtime`, `native-editor` și `android` au încheiat cu
+succes. Artefactele sunt `13229427568` și `13230170683`, ambele din sursa
+`a7fb12d30d228b971c35d186abefc0f52720bb49`.
+
+- APK standard: 112.628.702 bytes, SHA-256
+  `9a7147f1a485a1acdb57aae29f5fa180930f476b862e7bab756073a4b327b0c1`,
+  certificat debug `5321be67933ed6e040dddad3f4ff5ecbe0dc8bde1d9ebd6fbbb0a2b625292da5`.
+- APK Ziva: 112.630.790 bytes, SHA-256
+  `4e9b739a5a662780343e45ebf8ac7d82520171a844bd9426a3cc8f2966e4b157`,
+  certificat debug `d9d7fa4e4a0b632e405aef6f0e1d0e99813eedd0db3ac1f27a53786ca9596c88`.
+- Ambele pachete au trecut verificarea ZIP, au numai ABI `arm64-v8a`, conțin
+  manifestul runtime-ului încorporat și cele 46 de scripturi identice byte cu
+  byte. Sunt prezente `AIPiRuntime`, textele `Meta Model API` și
+  `muse-spark-1.3-contributor`; nu există `AIOpenCodeRuntime`, `libai_pty.so` sau
+  active OpenCode.
+- Instalatoarele din `/storage/emulated/0/Download` au fost înlocuite atomic la
+  **3.11.2026, 13:22:57 CET**. Copiile vechi din `92b98d3819` sunt păstrate în
+  `~/godot-ai-artifacts/pi-meta-a7fb12d30d/previous/`; în Download rămân numai
+  cele două instalatoare curente și checksum-urile lor.
+- `https://api.meta.ai/v1/status` a răspuns operațional, iar `GET /v1/models`
+  fără cheie a răspuns HTTP 401, conform așteptărilor. Nu s-a făcut o cerere
+  autentificată.
+
+**Neefectuat încă.** Nu s-a testat o cheie Meta reală, un tur de coding live și
+instalarea pe dispozitiv; `adb devices` nu a găsit niciun dispozitiv conectat.
+Contributor mode implică folosirea conținutului pentru antrenarea modelelor Meta;
+utilizatorul trebuie să aleagă explicit varianta Contributor, nu este selectată
+automat de aplicație. Certificatele sunt identități debug efemere ale CI, deci
+actualizarea peste o instalare semnată cu altă cheie cere dezinstalare sau aceeași
+cheie de semnare.
 
 Jurnal: 3.11.2026 — AG-86, Meta Model API adăugat cu Muse Spark Standard și
-Contributor, catalog Responses, tarife oficiale și pictogramă. Verificarea live
-rămâne de făcut.
+Contributor, catalog Responses, tarife oficiale și pictogramă. CI runtime,
+native-editor și Android trecut pentru ambele distribuții; APK-urile au fost
+verificate și livrate în Download. Verificarea autentificată și cea pe dispozitiv
+rămân de făcut.
 
 ## AG-85 — Agent AI pe Pi RPC, fără OpenCode TUI — 3.11.2026
 
