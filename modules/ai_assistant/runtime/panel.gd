@@ -5094,7 +5094,7 @@ func _search_settings(query: String) -> void:
 	_layout_settings.call_deferred()
 
 func _select_settings(tab: int) -> void:
-	if project_manager_mode and not tab in [section_tabs["general"], section_tabs["providers"], section_tabs["accounts"], section_tabs["journal"], section_tabs["voice"]]: tab = section_tabs["general"]
+	if project_manager_mode and not tab in [section_tabs["general"], section_tabs["providers"], section_tabs["accounts"], section_tabs["journal"], section_tabs["voice"], section_tabs["packages"]]: tab = section_tabs["general"]
 	settings_tabs.current_tab = tab
 	if tab == section_tabs.get("journal", -1): _refresh_journal(true)
 	if tab == section_tabs.get("packages", -1): _packages_refresh(true)

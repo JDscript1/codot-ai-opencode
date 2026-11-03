@@ -140,7 +140,7 @@ func _run() -> void:
 	root.get_texture().get_image().save_png(OS.get_environment("GODOT_AI_QA_OUTPUT").path_join("start-chat.png"))
 	panel.open_settings("providers")
 	await create_timer(0.2).timeout
-	check(panel.settings_navigation.item_count == 5, "Start settings retain assistant sections without Ziva setup")
+	check(panel.settings_navigation.item_count == 6, "Start settings retain assistant sections and runtime package updates without Ziva setup")
 	check(not panel.forms.has("ziva") and not panel.section_tabs.has("ziva"), "Independent Ziva management does not depend on assistant settings")
 	panel.open_settings("providers")
 	panel.settings_window.get_texture().get_image().save_png(OS.get_environment("GODOT_AI_QA_OUTPUT").path_join("start-providers.png"))

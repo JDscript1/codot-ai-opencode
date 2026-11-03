@@ -269,7 +269,9 @@ tasks.register('buildAiEmbeddedRuntime') {
 }
 
 tasks.configureEach {
-    if (name.startsWith('merge') && (name.endsWith('JniLibFolders') || name.endsWith('Assets'))) {
+    def assetConsumer = (name.contains('Assets') || name.contains('SourceSetPaths')) &&
+            (name.startsWith('merge') || name.startsWith('map') || name.startsWith('package') || name.startsWith('compress'))
+    if (name == 'preBuild' || (name.startsWith('merge') && name.endsWith('JniLibFolders')) || assetConsumer) {
         dependsOn 'buildAiEmbeddedRuntime'
     }
 }
