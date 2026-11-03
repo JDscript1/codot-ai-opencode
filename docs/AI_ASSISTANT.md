@@ -32,6 +32,13 @@ opens the same global configuration window.
   Copilot and Kimi use the optional companion on your own computer/server.
   On Android, API-key and local profiles use the app-owned [Pi RPC harness](PI_RPC.md);
   SIWC and companion profiles intentionally fall back to the native harness.
+  ChatGPT sign-in uses a stable `127.0.0.1:1455/auth/callback` listener (or a
+  previously saved callback port) and does not put the saved ID token in the
+  browser URL. ChatGPT plan usage requires an eligible Plus/Pro account. If the
+  OpenAI consent page remains on its spinner, first retry in Chrome Incognito
+  with adblock/VPN extensions disabled, then use **Reînregistrează ChatGPT**.
+  The consent page is hosted by OpenAI; without a callback the app cannot
+  complete the exchange.
 - **Generare:** choose Runware, Meshy, Tripo, OpenAI Images or an existing ComfyUI
   server. Import a workflow exported in API format, bind its prompt/reference fields
   and output node, then validate the server. PNG and self-contained GLB 2.0 are supported.
@@ -49,12 +56,12 @@ opens the same global configuration window.
   [integrations](AI_INTEGRATIONS.md).
 - **AGENT.MD:** edit project memory in `AGENT.md`; existing `AGENTS.md` is preserved.
 
-The current installers are built from `1c81ec4038` and include the Pi RPC
+The current installers are built from `87563a46cd` and include the Pi RPC
 harness, Meta Model API (Muse Spark Standard and Contributor), control and
 integrations, [chat files, previews, editor control, Store and real
 diff](AI_CHAT_FILES_AND_EDITOR_CONTROL.md), activity drawer, 3D preview controls,
-image-purpose rules and optional Termux/Blender setup. The later `0f9555e01c`
-commit only adds the required license header to the native AI bridge.
+image-purpose rules, optional Termux/Blender setup, and the SIWC ChatGPT
+callback/registration fixes.
 The Android Blender card has one install action, automatic verification and agent
 activation, then a compact **Blender Active** status and **Uninstall Blender**.
 Diagnostics and worker output are in Journal; package removal preserves containers

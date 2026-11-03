@@ -215,6 +215,11 @@ anterioare sunt păstrate numai ca dovezi în
 `~/godot-ai-artifacts/pi-native-9fb15f9f16/previous/`; în Download au rămas cele
 două build-uri noi.
 
+Instalatoarele curente din Download au fost ulterior recompilate din
+`87563a46cd` pentru corecția fluxului SIWC ChatGPT; arhitectura Pi descrisă aici
+este neschimbată. Detaliile livrării SIWC sunt în AG-88 din
+[jurnalul proiectului](../PROGRES_SI_PLAN.md).
+
 ## Limite
 
 - Binarul Node.js ARM64 și instalarea Pi în PRoot nu au fost încă rulate pe

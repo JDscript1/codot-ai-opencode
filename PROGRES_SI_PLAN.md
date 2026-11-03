@@ -8,6 +8,62 @@ etapă importantă: implementare, verificare, compilare sau livrare. „Implemen
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
 
+## AG-88 — diagnostic și corecții pentru conectarea ChatGPT — 3.11.2026
+
+**Defect raportat.** După „Conectează ChatGPT”, browserul afișează pagina de
+consimțământ OpenAI, iar butonul rămâne în spinner. Aplicația nu primește
+callback-ul OAuth și rămâne în așteptare.
+
+**Dovezi.** Capturile din `.cache/godot-ai-logs/device/` arată identitatea
+`Tudor Elena Diana` și cardul „Plan ChatGPT”, dar butonul de continuare este
+blocat în spinner. Requestul ajunge la `auth.openai.com`; nu este o eroare de
+callback local. Profilul vechi avea `client_id` emis `oaiapp_...`, iar tokenurile
+erau prezente în vault la încercarea anterioară.
+
+**Corectat în surse.**
+
+- fluxul de autorizare nu mai trimite `id_token_hint` în URL-ul browserului;
+  păstrează `login_hint` și clientul emis, ca implementarea oficială SIWC;
+- callback-ul folosește preferențial portul stabil `1455`; dacă portul este
+  ocupat, încearcă portul salvat anterior, apoi un port liber;
+- `client_id` și `redirect_uri` sunt salvate imediat după callback, înainte de
+  schimbul codului, iar profilul nou este persistat înainte de deschiderea
+  browserului; un cod expirat nu mai pierde înregistrarea;
+- răspunsul de token include diagnostic util (`invalid_grant`, HTTP status)
+  fără tokenuri sau secrete;
+- după 45 de secunde, aplicația afișează instrucțiuni pentru spinner: Chrome
+  Incognito, dezactivarea adblock/VPN și verificarea unui plan Plus/Pro eligibil;
+- butonul **Reînregistrează ChatGPT** elimină numai profilul și tokenul SIWC
+  vechi, apoi pornește o înregistrare dynamică nouă.
+
+**Verificat local.** `gdparse` pe `accounts.gd`, `panel.gd` și
+`test_runtime.gd`; testele OAuth au fost actualizate pentru absența
+`id_token_hint`, `login_hint` salvat și diagnosticul de eroare.
+
+**Verificat în CI și în APK.** Workflow-urile
+[41665900808](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41665900808)
+și [41665902253](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41665902253)
+au trecut integral (`runtime`, `native-editor`, `android`). Artefactele sunt
+`13246307979` și `13244538751`.
+
+- standard: 112.631.150 bytes, SHA-256
+  `9d5d886609616d43d45a73ecbccbd735e940441597d4ee38bac238b59e8166ac`,
+  certificat `dd5ff2be5bcebdeed46b4ce3114c4530e65972471f27f0cde82b5e6261c8650e`;
+- Ziva: 112.632.646 bytes, SHA-256
+  `9ab685d5cb1682b048fce9038df17cc4eba136336557e0e45ffd3f39a3524f1c`,
+  certificat `9927ab38f970737da118db098541ed845bace1e271de8b85c79acb4898fce38f`;
+- ambele au 46 de scripturi încorporate, callback-ul `1455`, butonul de
+  reînregistrare și diagnosticul OAuth; `id_token_hint` nu mai apare în surse;
+- Download a fost înlocuit atomic la **3.11.2026, 17:27:33 CET**; copiile
+  anterioare din `9fb15f9f16` sunt în
+  `~/godot-ai-artifacts/siwc-87563a46cd/previous/`.
+
+**Neefectuat încă.** Proba live după noul APK, confirmarea planului ChatGPT
+eligibil și comportamentul browserului Android. Pagina de consent rămâne sub
+controlul OpenAI; dacă spinnerul persistă și în Incognito, fără adblock/VPN,
+problema este upstream sau ține de eligibilitatea contului, nu de listener-ul
+local.
+
 ## AG-87 — Pi deține uneltele, sesiunea și contextul — 3.11.2026
 
 **Cerință.** Harness-ul Pi trebuie folosit nativ pentru unelte, context, memorie
