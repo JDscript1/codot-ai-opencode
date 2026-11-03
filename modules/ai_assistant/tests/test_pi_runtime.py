@@ -37,7 +37,10 @@ class PiRuntimeTests(unittest.TestCase):
         self.assertNotIn('"name": "search"', mcp)
 
     def test_native_tools_and_read_only_toolset_are_explicit(self):
-        self.assertIn('JSONArray(listOf("read", "bash", "edit", "write", "grep", "find", "ls", "tool_search"))', self.source)
+        self.assertIn(
+            'JSONArray(listOf("read", "bash", "edit", "write", "grep", "find", "ls", "tool_search"))',
+            self.source,
+        )
         self.assertIn('"read,grep,find,ls,tool_search"', self.source)
         self.assertIn('mode in setOf("plan", "read_only")', self.source)
 

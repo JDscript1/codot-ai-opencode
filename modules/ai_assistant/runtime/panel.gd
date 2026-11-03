@@ -2744,7 +2744,7 @@ func _try_pi_turn(profile: Dictionary, model: String, effort: String, text: Stri
 			pi_error = "Pi s-a oprit înainte de finalizarea răspunsului."
 			if not detail.is_empty(): pi_error += "\n" + detail
 	if cancel.get("cancelled", false): pi_session.abort()
-	var keep_session := pi_error.is_empty() and not cancel.get("cancelled", false) and pi_settled
+	var keep_session: bool = pi_error.is_empty() and not bool(cancel.get("cancelled", false)) and pi_settled
 	if not keep_session:
 		await _stop_pi_process()
 		godot_mcp.set_read_only(false)
