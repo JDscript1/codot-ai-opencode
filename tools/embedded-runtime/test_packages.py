@@ -1,13 +1,14 @@
 import hashlib
 import importlib.util
 import json
-from pathlib import Path
 import tempfile
 import unittest
-from unittest import mock
 import zipfile
+from pathlib import Path
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location("runtime_packages", Path(__file__).with_name("packages.py"))
+assert spec is not None and spec.loader is not None
 packages = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(packages)
 

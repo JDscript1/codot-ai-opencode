@@ -6,6 +6,7 @@ Debian mirrors or nodejs.org: Linux is extracted from the existing rootfs
 asset, Node/Pi are unpacked from the pinned archives and the Debian packages
 come from a local apt repository generated here.
 """
+
 import argparse
 import hashlib
 import json
@@ -21,8 +22,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ASSET_PREFIX = "godot_ai/packages"
 DEPENDENCY_RE = re.compile(
-    r"^\s*([a-z0-9][a-z0-9+.-]*)(?::[a-zA-Z0-9-]+)?\s*"
-    r"(?:\(\s*(<<|<=|=|>=|>>|<|>)\s*([^)]+?)\s*\))?\s*$"
+    r"^\s*([a-z0-9][a-z0-9+.-]*)(?::[a-zA-Z0-9-]+)?\s*" r"(?:\(\s*(<<|<=|=|>=|>>|<|>)\s*([^)]+?)\s*\))?\s*$"
 )
 
 
@@ -51,7 +51,7 @@ def download(path, spec):
         except Exception:
             if attempt == 2:
                 raise
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
         finally:
             partial.unlink(missing_ok=True)
     return path
@@ -105,7 +105,7 @@ def _version_part(first, second):
             return len(digits_a) - len(digits_b)
         if digits_a != digits_b:
             return -1 if digits_a < digits_b else 1
-        first, second = first[len(digits_a):], second[len(digits_b):]
+        first, second = first[len(digits_a) :], second[len(digits_b) :]
     return 0
 
 
@@ -239,12 +239,16 @@ def installed_packages(rootfs):
 
 
 def rootfs_source(work, lock):
-    path = work / "downloads" / ("debian-" + lock["sha256"][:16] + ".tar.gz")
-    return download(path, {
-        "url": lock["url"],
-        "size": lock["size"],
-        "sha256": lock["sha256"],
-    })
+    cached = work / ("debian-" + lock["sha256"][:16] + ".tar.gz")
+    path = cached if cached.is_file() else work / "downloads" / cached.name
+    return download(
+        path,
+        {
+            "url": lock["url"],
+            "size": lock["size"],
+            "sha256": lock["sha256"],
+        },
+    )
 
 
 def index_source(work, debian):
@@ -271,9 +275,22 @@ def package_stanza(record, filename, size, sha256):
     values["Size"] = str(size)
     values["SHA256"] = sha256
     preferred = [
-        "Package", "Version", "Architecture", "Multi-Arch", "Maintainer", "Installed-Size",
-        "Pre-Depends", "Depends", "Provides", "Section", "Priority", "Filename",
-        "Size", "SHA256", "Description", "Homepage",
+        "Package",
+        "Version",
+        "Architecture",
+        "Multi-Arch",
+        "Maintainer",
+        "Installed-Size",
+        "Pre-Depends",
+        "Depends",
+        "Provides",
+        "Section",
+        "Priority",
+        "Filename",
+        "Size",
+        "SHA256",
+        "Description",
+        "Homepage",
     ]
     output = []
     for key in preferred:
