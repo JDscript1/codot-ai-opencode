@@ -58,6 +58,41 @@ class PiRuntimeTests(unittest.TestCase):
         self.assertIn('panel.call("agent_execute", tool, arguments)', mcp)
         self.assertNotIn('"name": "search"', mcp)
 
+    def test_user_facing_identity_is_agent_ai_not_the_harness(self):
+        self.assertIn('writeText(context, "$AGENT_DIR/SYSTEM.md", SYSTEM_INSTRUCTIONS', self.source)
+        self.assertIn("You are Agent AI", self.source)
+        self.assertNotIn("You are a coding assistant running inside pi", self.source)
+        self.assertNotIn("Pi's native", self.source)
+        panel = PANEL.read_text()
+        self.assertIn('_status("Agent AI gândește…")', panel)
+        self.assertIn('_status("Agent AI gândește…" if pi_text.is_empty() else "Agent AI răspunde…")', panel)
+        self.assertNotIn('_status("Pi lucrează…")', panel)
+        self.assertNotIn('"Pi răspunde…"', panel)
+        mcp = MCP.read_text()
+        self.assertNotIn("Pi's tool_search", mcp)
+
+    def test_full_godot_and_ziva_control_tools_are_exposed(self):
+        panel = PANEL.read_text()
+        self.assertIn("const AGENT_MCP_BLOCKED_TOOLS := []", panel)
+        for tool in (
+            "ziva_status",
+            "ziva_start",
+            "ziva_stop",
+            "ziva_restart",
+            "ziva_install",
+            "ziva_update",
+            "ziva_task_cancel",
+            "ziva_permission_reply",
+            "ziva_question_reply",
+            "ziva_question_reject",
+        ):
+            with self.subTest(tool=tool):
+                self.assertIn(f'Common.tool("{tool}"', panel)
+        ziva = (ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIZivaChat.kt").read_text()
+        self.assertIn('"permissions/reply"', ziva)
+        self.assertIn('"questions/reply"', ziva)
+        self.assertIn('"questions/reject"', ziva)
+
     def test_native_tools_and_read_only_toolset_are_explicit(self):
         self.assertIn(
             'JSONArray(listOf("read", "bash", "edit", "write", "grep", "find", "ls", "tool_search"))',

@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.lang.ref.WeakReference
@@ -173,6 +174,16 @@ object AIZivaRuntime {
             } }
         } else if (action == "ziva_check_updates") {
             AIZivaUpdates.check(context)
+        } else if (action == "ziva_stop") {
+            val activity = host.get() ?: error("Editorul Android se pregătește.")
+            handler.post { synchronized(this) {
+                owners[activity] = ""
+                project = ""; pending = 0
+                try { stop(context) } catch (error: Exception) {
+                    val failed = read(context).put("status", "error").put("message", error.message?.take(240))
+                    save(context, failed)
+                }
+            } }
         } else if (action in listOf("ziva_install", "ziva_update", "ziva_restart")) {
             val target = args.optString("project_directory")
             val release = if (action == "ziva_update") AIZivaUpdates.available(context) else null
@@ -204,6 +215,9 @@ object AIZivaRuntime {
                 .put("error", "Ziva rulează pe alt proiect; deschide același proiect în tabul Ziva.")
         return when (action) {
             "ziva_chat_send" -> AIZivaChat.send(port, args.optString("prompt"), args.optString("chat_id"), args.optInt("timeout_seconds", 600))
+            "ziva_chat_reply_permission" -> AIZivaChat.replyPermission(port, args.optString("request_id"), args.optString("reply"))
+            "ziva_chat_reply_question" -> AIZivaChat.replyQuestion(port, args.optString("request_id"), args.optJSONArray("answers") ?: JSONArray())
+            "ziva_chat_reject_question" -> AIZivaChat.rejectQuestion(port, args.optString("request_id"))
             else -> JSONObject().put("ok", false).put("code", "ziva_unknown_action").put("error", "Operație Ziva necunoscută.")
         }
     }

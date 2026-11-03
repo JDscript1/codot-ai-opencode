@@ -64,6 +64,54 @@ controlul OpenAI; dacă spinnerul persistă și în Incognito, fără adblock/VP
 problema este upstream sau ține de eligibilitatea contului, nu de listener-ul
 local.
 
+## AG-90 — suită AAA, Blender bundled și control complet — 3.11.2026
+
+**Cerință nouă.** Blender CLI trebuie să facă parte din suita aplicației și să
+fie livrat în APK, fără descărcare ulterioară. Agenții care rulează prin
+harness-ul nativ trebuie să controleze Blender, Ziva, Godot, generatoarele de
+imagini/3D și restul uneltelor. Se cere un inventar complet și construcție pe
+etape, iar la final Termux se curăță de duplicate și fișiere inutile.
+
+**Inventar.** Lista completă, diferențele și etapele sunt în
+`docs/TOOL_SUITE_ROADMAP.md`. Sunt inventariate uneltele Godot de proiect,
+cod, scene, resurse, editor, debugger, QA, experimente, profilare, imagini/3D,
+store, GitHub, Linux, planificare, memorie, skills, Ziva și Blender.
+
+**Implementat în surse, în această etapă.**
+
+- Identitatea modelului este acum Agent AI. Promptul propriu `SYSTEM.md`
+  înlocuiește identitatea implicită a runtime-ului, iar mesajele de stare nu
+  mai spun că agentul este Pi sau că Pi gândește.
+- `godot_describe` și `godot_call` nu mai sunt blocate de puntea MCP; Agent AI
+  poate inspecta și controla suprafețele Godot reflectate, nu doar uneltele cu
+  nume fix.
+- Ziva are unelte de stare, pornire, oprire, repornire, instalare, actualizare,
+  anulare, răspuns la permisiuni și răspuns/reject la întrebări. Rutele native
+  sunt `permissions/reply`, `questions/reply` și `questions/reject`.
+- Blender rămâne disponibil prin conectorul existent în această etapă. Blender
+  bundled și backend-ul direct sunt etapa următoare, nu sunt marcate ca
+  finalizate.
+
+**Analiză Blender pentru APK.** Debian trixie oferă `blender 4.3.2+dfsg-2`
+pentru arm64. Rezolvarea offline găsește **351 pachete**, aproximativ **262 MB
+comprimat**; amprenta dezarhivată și timpul de instalare trebuie măsurate în CI
+înainte de includere. O variantă oficială Blender ARM64 poate fi evaluată dacă
+dimensiunea sau licența o justifică.
+
+**Verificat local.** `gdparse` pe `panel.gd`, `godot_mcp.gd`, `pi_session.gd`,
+testul runtime și fixture; testele Python statice pentru Pi/agent și pachete
+au trecut. Nu există încă un APK construit după aceste modificări și nicio
+probă live cu furnizori, Ziva sau Blender.
+
+**Neefectuat.** Compilarea APK pentru etapa curentă, bundling-ul Blender,
+uneltele directe `blender_*`, pipeline-ul de asseturi, testarea AAA și
+curățarea Termux. Curățarea Termux se face numai după ce funcțiile echivalente
+sunt app-native și verificate pe dispozitiv.
+
+Jurnal: 3.11.2026 — AG-90, direcția mutată pe suită completă; identitate Agent
+AI, acces Godot complet și control Ziva în surse, Blender urmează să fie
+integrat direct în APK. Termux rămâne neatins până la finalul migrării.
+
 ## AG-89 — pachete runtime incluse în APK și actualizare offline — 3.11.2026
 
 **Cerință.** Mediul minim să fie pregătit în APK, să nu mai fie descărcat la

@@ -180,17 +180,17 @@ object AIPackageManager {
         val nodeDir = node.getString("guest_directory")
         val piDir = pi.getString("guest_directory")
         require(nodeDir.matches(Regex("/root/\\.local/node_modules/node")) && piDir.matches(Regex("/root/\\.local/node_modules/@earendil-works/pi-coding-agent"))) {
-            "Destinațiile runtime Pi sunt invalide."
+            "Destinațiile runtime Agent AI sunt invalide."
         }
         val cache = File(runtime.root, "tmp/godot-ai-packages")
         val staging = "/root/.local.godot-staging"
         val previous = "/root/.local.godot-previous"
         AILinuxRuntimeFiles.deleteTree(cache)
-        check(cache.mkdirs()) { "Spațiul temporar pentru Pi nu poate fi creat." }
+        check(cache.mkdirs()) { "Spațiul temporar pentru Agent AI nu poate fi creat." }
         try {
             progress("Pregătesc Node.js ${node.optString("version")} din APK…")
             val nodeAsset = copyAsset(context, manifest, node.getString("asset"), File(cache, node.getString("asset")), cancelled, progress)
-            progress("Pregătesc harness-ul Pi ${pi.optString("version")} din APK…")
+            progress("Pregătesc harness-ul Agent AI ${pi.optString("version")} din APK…")
             val piAsset = copyAsset(context, manifest, pi.getString("asset"), File(cache, pi.getString("asset")), cancelled, progress)
             val script = """
                 set -eu
@@ -207,20 +207,20 @@ object AIPackageManager {
                 fi
                 rm -rf '$previous' /tmp/godot-ai-packages
             """.trimIndent()
-            progress("Extrag Node.js și Pi direct din pachetele APK…")
+            progress("Extrag Node.js și harness-ul Agent AI direct din pachetele APK…")
             val extracted = runtime.launch(listOf("/bin/sh", "-c", script), null, 1200)
             if (extracted.optInt("exit_code", -1) != 0) {
-                error("Extragerea Node.js/Pi a eșuat: " + extracted.optString("output").takeLast(2500))
+                error("Extragerea Node.js/Agent AI a eșuat: " + extracted.optString("output").takeLast(2500))
             }
             val nodeFile = File(runtime.root, PI_NODE)
             val cliFile = File(runtime.root, PI_CLI)
-            check(nodeFile.isFile && nodeFile.length() > 1_000_000 && cliFile.isFile) { "Node.js sau Pi lipsește după extragere." }
+            check(nodeFile.isFile && nodeFile.length() > 1_000_000 && cliFile.isFile) { "Node.js sau Agent AI lipsește după extragere." }
             val nodeProbe = runtime.launch(listOf("/root/.local/node_modules/node/bin/node", "--version"), null, 120)
             check(nodeProbe.optInt("exit_code", -1) == 0) { "Node.js din APK nu a răspuns: " + nodeProbe.optString("output").takeLast(1000) }
             val piProbe = runtime.launch(listOf("/root/.local/node_modules/node/bin/node",
                 "/root/.local/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js", "--version"), null, 180)
-            check(piProbe.optInt("exit_code", -1) == 0) { "Pi din APK nu a răspuns: " + piProbe.optString("output").takeLast(1000) }
-            progress("Pi ${pi.optString("version")} a fost instalat și verificat din APK.")
+            check(piProbe.optInt("exit_code", -1) == 0) { "Agent AI din APK nu a răspuns: " + piProbe.optString("output").takeLast(1000) }
+            progress("Agent AI ${pi.optString("version")} a fost instalat și verificat din APK.")
         } finally { AILinuxRuntimeFiles.deleteTree(cache) }
     }
 

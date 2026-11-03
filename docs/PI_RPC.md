@@ -67,8 +67,18 @@ unealta relevantă cu mecanismul nativ BM25 al Pi, primește schema exactă și 
 apelează direct. Aplicația nu mai oferă un wrapper propriu
 `search`/`describe`/`call` și nu mai impune modelului toate schemele deodată.
 Timeout-ul MCP este mărit la o oră pentru ca o scriere să poată aștepta
-aprobarea umană. Sunt blocate numai meta-uneltele de reflecție recursivă
-(`godot_call`, `godot_describe`, `godot_search` și prefixul `tool_`).
+aprobarea umană. `godot_describe` și `godot_call` sunt disponibile pentru
+reflecția completă a claselor, obiectelor, proprietăților, semnalelor și
+metodelor Godot. Sunt ascunse numai uneltele interne cu prefixul `tool_`, ca
+agentul să nu poată ocoli catalogul și aprobările aplicației.
+
+Controlul Ziva este expus prin `ziva_status`, `ziva_start`, `ziva_stop`,
+`ziva_restart`, `ziva_install`, `ziva_update`, `ziva_task`,
+`ziva_task_poll`, `ziva_task_cancel`, `ziva_task_result`,
+`ziva_permission_reply`, `ziva_question_reply` și
+`ziva_question_reject`. Rutele native pentru conversație sunt
+`permissions/reply`, `questions/reply` și `questions/reject`. Acestea sunt
+operații externe și păstrează regulile de aprobare ale aplicației.
 
 Serverul ascultă exclusiv pe `127.0.0.1`, cere un token Bearer de 32 de octeți
 și nu acceptă cereri fără autentificare. Capturile sunt trimise ca blocuri MCP
@@ -102,11 +112,12 @@ corectă. Sesiunile sunt persistate de Pi în `/root/.pi/sessions`.
 Promptul per tur este redus la modul de lucru, modelul selectat, maparea
 `/workspace` ↔ `res://`, fișierele și referințele active, imaginile și cererea
 utilizatorului. Instrucțiunile stabile sunt scrise în
-`/root/.pi/agent/APPEND_SYSTEM.md`; Pi le încarcă în system prompt. Rezumatul de
-compactare al aplicației, planul intern și conținutul `AGENT.md` nu mai sunt
-injectate în fiecare prompt. Pi citește `AGENTS.md`, `AGENT.md` sau `CLAUDE.md`
-din proiect când are nevoie de ele, iar `AGENTS.md`/`CLAUDE.md` sunt descoperite
-nativ de Pi.
+`/root/.pi/agent/SYSTEM.md`, care înlocuiește identitatea implicită a
+harness-ului cu **Agent AI**; `/root/.pi/agent/APPEND_SYSTEM.md` păstrează
+numai memento-ul de identitate. Rezumatul de compactare al aplicației, planul
+intern și conținutul `AGENT.md` nu mai sunt injectate în fiecare prompt. Pi
+citește `AGENTS.md`, `AGENT.md` sau `CLAUDE.md` din proiect când are nevoie de
+ele, iar `AGENTS.md`/`CLAUDE.md` sunt descoperite nativ de Pi.
 
 Compactarea automată a aplicației este dezactivată în tururile gestionate de Pi;
 Pi folosește propriul prag, rezervă de output și istoric recent. Istoricul
@@ -159,10 +170,13 @@ istoricul aplicației.
   `test_runtime.gd`;
 - `py_compile` pe generatorul de runtime și pe runner-ele Python;
 - `git diff --check`;
-- `test_pi_runtime.py`: șapte verificări statice pentru versiuni,
+- `test_pi_runtime.py`: unsprezece verificări statice pentru versiuni,
   `exposure: deferred`, `tool_search`, `APPEND_SYSTEM.md`, modul read-only,
-  reutilizarea sesiunii, compactarea Pi, calea normală de aprobare și absența
-  suprafeței OpenCode;
+  reutilizarea sesiunii, compactarea Pi, calea normală de aprobare, identitatea
+  Agent AI, accesul complet la reflecția Godot, uneltele de control Ziva și
+  absența suprafeței OpenCode;
+- `test_runtime.gd` verifică expunerea `godot_call`/`godot_describe`, uneltele
+  Ziva și catalogul complet al aplicației;
 - escapare `$`/`!` pentru `apiKey` a fost verificată direct cu resolverul Pi
   1.5.0: cheile literale nu mai pot declanșa expansiune de mediu sau comenzi
   shell prin sintaxa configurației;

@@ -22,11 +22,11 @@ func configure(native_bridge: Node, project: String) -> void:
 
 func _request(action: String, args: Dictionary = {}) -> Dictionary:
 	if not is_instance_valid(bridge) or not bridge.has_method("linux_runtime_request"):
-		return _failure("Pi este disponibil doar în editorul Android.", "pi_unavailable")
+		return _failure("Agent AI este disponibil doar în editorul Android.", "pi_unavailable")
 	var payload := args.duplicate(true)
 	payload["project_directory"] = project_directory
 	var result: Variant = bridge.call("linux_runtime_request", action, payload)
-	return result if result is Dictionary else _failure("Răspuns Pi invalid.", "pi_protocol_error")
+	return result if result is Dictionary else _failure("Răspuns Agent AI invalid.", "pi_protocol_error")
 
 func refresh() -> Dictionary:
 	state = _request("pi_status")

@@ -137,7 +137,7 @@ object AILinuxRuntime {
                 }
                 "packages_update" -> {
                     check(!AIZivaRuntime.isBusy(current)) { "Oprește Ziva înainte de actualizarea pachetelor." }
-                    check(!AIPiRuntime.isBusy()) { "Oprește sesiunea Pi înainte de actualizarea pachetelor." }
+                    check(!AIPiRuntime.isBusy()) { "Oprește sesiunea Agent AI înainte de actualizarea pachetelor." }
                     val active = active(current)
                     check(active.isEmpty()) { "O altă sarcină Linux este în lucru." }
                     AIPackageManager.manifest(current)
