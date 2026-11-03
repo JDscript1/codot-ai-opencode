@@ -37,9 +37,28 @@ nu mai este expus. În Plan/Ask, serverul publică numai unelte read-only.
   rezultatele și imaginile păstrează fluxul existent de aprobare și audit.
 
 **Verificat local.** `gdparse` pe scripturile runtime și testul Godot;
-`test_pi_runtime.py` 7/7; `py_compile`; `git diff --check`. Testele runtime au
-trecut pe ambele distribuții în CI înainte de pasul de randare, iar build-urile
-Android sunt în curs la momentul acestei însemnări.
+`test_pi_runtime.py` 7/7; `py_compile`; `git diff --check`.
+
+**Verificat în CI și în APK.** Ambele workflow-uri au trecut integral, inclusiv
+`runtime`, `native-editor` și `android`:
+[41655561284](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41655561284)
+pentru standard și
+[41655567953](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41655567953)
+pentru Ziva. Artefactele sunt `13239693064` și `13240387857`.
+
+- APK standard: 112.626.618 bytes, SHA-256
+  `716620d34b90b468aeba18a1ddf3a7db5f120405a81cffe009184c9f153e1c91`,
+  certificat debug `c2bcbb05cdaaedb1f78f69b02d779a6c34edae5763c931caab8fe05cb56846c2`.
+- APK Ziva: 112.629.250 bytes, SHA-256
+  `bbbb66bdbc1da7d7a5ba65d1b8502761176644084ca2b0bb63f8d346f5146573`,
+  certificat debug `188a549174b80a2fc9a07f529605483e8e5678cf4e47a1309176d1cec6ea5d1e`.
+- Ambele păstrează numai ABI `arm64-v8a`, manifestul runtime-ului, cele 46 de
+  scripturi byte cu byte, `AIPiRuntime`, `APPEND_SYSTEM.md`, `tool_search`,
+  `deferred`, `compact` și textele Meta; nu conțin OpenCode/PTY.
+- Download a fost înlocuit atomic la **3.11.2026, 16:19:16 CET**. Instalatoarele
+  anterioare din `1c81ec4038` sunt în
+  `~/godot-ai-artifacts/pi-native-9fb15f9f16/previous/`; în Download au rămas
+  numai cele două instalatoare curente și checksum-urile.
 
 **Neefectuat încă.** Proba live cu un furnizor real, instalarea pe dispozitiv și
 validarea vizuală Android. Conversațiile bifurcate/importate pornesc o sesiune

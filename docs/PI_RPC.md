@@ -159,9 +159,10 @@ istoricul aplicației.
   `test_runtime.gd`;
 - `py_compile` pe generatorul de runtime și pe runner-ele Python;
 - `git diff --check`;
-- `test_pi_runtime.py`: cinci verificări statice pentru versiuni, `exposure`,
-  timeout, modul read-only, calea normală de aprobare și absența suprafeței
-  OpenCode;
+- `test_pi_runtime.py`: șapte verificări statice pentru versiuni,
+  `exposure: deferred`, `tool_search`, `APPEND_SYSTEM.md`, modul read-only,
+  reutilizarea sesiunii, compactarea Pi, calea normală de aprobare și absența
+  suprafeței OpenCode;
 - escapare `$`/`!` pentru `apiKey` a fost verificată direct cu resolverul Pi
   1.5.0: cheile literale nu mai pot declanșa expansiune de mediu sau comenzi
   shell prin sintaxa configurației;
@@ -170,11 +171,10 @@ istoricul aplicației.
 - pachetul `node-linux-arm64@22.19.0` conține un ELF 64-bit AArch64 (ET_EXEC)
   cu interpretor glibc `/lib/ld-linux-aarch64.so.1`, compatibil cu Debianul din
   PRoot;
-- probă end-to-end locală cu Pi 1.5.0, un furnizor OpenAI-compatible simulat și
-  un server MCP simulat: modelul a primit cele șapte unelte native plus
-  `mcp__godot__search`, `mcp__godot__describe`, `mcp__godot__call`; apelul
-  `search` a trecut prin transportul MCP și rezultatul a intrat în turul
-  următor.
+- `test_runtime.gd` a validat catalogul MCP complet, apelurile directe și
+  filtrarea read-only pentru Plan; joburile `runtime` au trecut în CI pe ambele
+  distribuții. Proba end-to-end locală cu Pi rămâne istorică; noul catalog
+  deferred nu a fost încă verificat cu un model live.
 
 Aceste probe validează protocolul și configurația, **nu** un furnizor real, un
 cont, instalarea Node.js ARM64 din APK sau interfața pe dispozitiv.
@@ -182,25 +182,24 @@ cont, instalarea Node.js ARM64 din APK sau interfața pe dispozitiv.
 ## Compilare CI
 
 Ambele distribuții au fost compilate din sursa
-`92b98d381932e2692e4ec9e5a82eb5e82f14ccef`:
+`9fb15f9f166061130c88d16cb9e3866c5fa8c5b6`:
 
-- [standard](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41606629516)
+- [standard](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41655561284)
   (`com.jdscript.godotai.debug`) și
-  [ziva-preview](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41606640713)
+  [ziva-preview](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41655567953)
   (`com.jdscript.godotai.ziva.debug`);
-- runtime-ul a raportat **1015 aserțiuni, 0 eșecuri** în ambele rulări;
-- editorul nativ compilat a trecut **991 de verificări, 0 eșecuri** în fiecare
-  dintre cele cinci configurații, plus suitele focalizate 134/75/76/71/76/90;
+- toate joburile `runtime`, `native-editor` și `android` au încheiat cu succes;
 - jobul Android a verificat semnătura v2, package-ul, ABI ARM64, clasele
-  `AIPiRuntime` în dex, absența suprafeței OpenCode/PTY, runtime-ul încorporat și
-  toate cele **46 de scripturi** `runtime/*.gd` byte cu byte.
+  `AIPiRuntime` în dex, absența suprafeței OpenCode/PTY, runtime-ul încorporat,
+  `APPEND_SYSTEM.md`, `tool_search`, `deferred`, `compact` și toate cele **46 de
+  scripturi** `runtime/*.gd` byte cu byte.
 
 Artefactele au fost descărcate și verificate local:
 
 | Distribuție | Bytes | SHA-256 | Certificat SHA-256 |
 |---|---:|---|---|
-| standard | 112.627.098 | `599b0f0d2af894e874236cdb42375f46a244628a4077ba0dc1bc526c9bea0a35` | `891fadfa32ff0262ddf19b5db55e5308f16d1c5b77e1f308c9d9748d14e3aad4` |
-| Ziva | 112.628.630 | `a78670f5315d9c8ab57eb99f571d81b83721f1976baf1735452d9c7cb54a547a` | `e12cc9609a9f636eb24b0a35f3be1136bb74a116dd6891b7189faf93641ee044` |
+| standard | 112.626.618 | `716620d34b90b468aeba18a1ddf3a7db5f120405a81cffe009184c9f153e1c91` | `c2bcbb05cdaaedb1f78f69b02d779a6c34edae5763c931caab8fe05cb56846c2` |
+| Ziva | 112.629.250 | `bbbb66bdbc1da7d7a5ba65d1b8502761176644084ca2b0bb63f8d346f5146573` | `188a549174b80a2fc9a07f529605483e8e5678cf4e47a1309176d1cec6ea5d1e` |
 
 APK-urile vechi din Download folosesc certificatul persistent
 `2e0a80969c099f7ff72bfe0c0cd33d98ebdd0e64bbf9729294df0b11665fcab5` din
@@ -210,10 +209,10 @@ efemerale. Instalarea peste aplicația existentă cere fie aceeași cheie de
 semnare, fie dezinstalare; APK-ul nu este instalat automat.
 
 Copiile cu nume stabile din Download au fost înlocuite atomic la
-**3.11.2026, 10:55 CET**: `Godot-AI-Android-arm64-debug.apk` și
+**3.11.2026, 16:19:16 CET**: `Godot-AI-Android-arm64-debug.apk` și
 `Godot-AI-Ziva-arm64-debug.apk`, fiecare cu checksum alăturat. Instalatoarele
 anterioare sunt păstrate numai ca dovezi în
-`~/godot-ai-artifacts/pi-rpc-92b98d3819/previous/`; în Download au rămas cele
+`~/godot-ai-artifacts/pi-native-9fb15f9f16/previous/`; în Download au rămas cele
 două build-uri noi.
 
 ## Limite
@@ -229,9 +228,11 @@ două build-uri noi.
   proiecte neîncrezute pe un dispozitiv partajat.
 - `plan_ask` din Pi folosește un card detașat de apelul MCP; pentru istoricul
   nativ nu inventează un ID de apel provider.
-- În Plan și Ask, `call` este dezactivat, deci Pi nu poate publica `task_update`
-  sau `plan_ask` în acele moduri. Planificarea structurată rămâne disponibilă
-  în Auto/Default și pe harness-ul nativ.
+- În Plan și Ask, catalogul MCP publică numai unelte `read`, deci Pi nu poate
+  publica `task_update` sau `plan_ask` prin MCP în acele moduri. Planificarea
+  structurată rămâne disponibilă în Auto/Default și pe harness-ul nativ.
+- Conversațiile bifurcate sau importate pornesc o sesiune Pi nouă; istoricul
+  aplicației rămâne în UI, dar nu este migrat automat în sesiunea Pi.
 - O singură sesiune Pi rulează pe un singur proiect. Versiunile Pi/Node sunt
   fixate și trebuie reverificate la fiecare actualizare.
 - Identitatea de semnare nu este încă persistentă în acest repository. Pentru
