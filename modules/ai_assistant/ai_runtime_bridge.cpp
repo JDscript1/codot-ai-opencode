@@ -52,16 +52,16 @@ int64_t AIAssistantDebugger::request(const String &p_command, const Dictionary &
 	if (!node) {
 		return -1;
 	}
-	Array sessions = get_sessions();
+	Array session_list = get_sessions();
 	int pinned = int(p_arguments.get("__session", -1));
-	if (p_arguments.has("__session") && (pinned < 0 || pinned >= sessions.size())) {
+	if (p_arguments.has("__session") && (pinned < 0 || pinned >= session_list.size())) {
 		return -1;
 	}
 	ScriptEditorDebugger *current = pinned >= 0 ? node->get_debugger(pinned) : node->get_current_debugger();
 	if (pinned < 0 && (!current || !current->is_session_active())) {
 		// A selected stopped tab must not hide the only live game peer.
 		current = nullptr;
-		for (int i = 0; i < sessions.size(); i++) {
+		for (int i = 0; i < session_list.size(); i++) {
 			ScriptEditorDebugger *candidate = node->get_debugger(i);
 			if (candidate && candidate->is_session_active()) {
 				if (current) {
@@ -79,7 +79,7 @@ int64_t AIAssistantDebugger::request(const String &p_command, const Dictionary &
 		return -1;
 	}
 	int index = -1;
-	for (int i = 0; i < sessions.size(); i++) {
+	for (int i = 0; i < session_list.size(); i++) {
 		if (node->get_debugger(i) == current) {
 			index = i;
 			break;

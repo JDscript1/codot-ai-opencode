@@ -221,9 +221,9 @@ void AIAssistantEditorPlugin::_bind_methods() {
 }
 
 bool AIAssistantEditorPlugin::scene_is_unsaved(const String &p_path) {
-	EditorData &data = EditorNode::get_editor_data();
-	for (int index = 0; index < data.get_edited_scene_count(); index++) {
-		if (data.get_scene_path(index) == p_path) {
+	EditorData &editor_data = EditorNode::get_editor_data();
+	for (int index = 0; index < editor_data.get_edited_scene_count(); index++) {
+		if (editor_data.get_scene_path(index) == p_path) {
 			return EditorNode::get_singleton()->is_scene_unsaved(index);
 		}
 	}
@@ -257,13 +257,13 @@ void AIAssistantEditorPlugin::_capture_diagnostic(void *p_user, const char *p_fu
 
 Dictionary AIAssistantEditorPlugin::diagnostics_snapshot() {
 	MutexLock lock(diagnostic_mutex);
-	Dictionary data;
-	data["events"] = diagnostic_events.duplicate(true);
-	data["sequence"] = diagnostic_sequence;
-	data["truncated"] = diagnostic_sequence > diagnostic_events.size();
+	Dictionary payload;
+	payload["events"] = diagnostic_events.duplicate(true);
+	payload["sequence"] = diagnostic_sequence;
+	payload["truncated"] = diagnostic_sequence > diagnostic_events.size();
 	Dictionary result;
 	result["ok"] = true;
-	result["result"] = data;
+	result["result"] = payload;
 	return result;
 }
 
@@ -318,15 +318,15 @@ Dictionary AIAssistantEditorPlugin::debugger_snapshot() {
 		snapshot["current"] = debugger == current;
 		sessions.push_back(snapshot);
 	}
-	Dictionary data;
-	data["available"] = true;
-	data["sessions"] = sessions;
-	data["events"] = events;
-	data["errors"] = errors;
-	data["warnings"] = warnings;
-	data["truncated"] = truncated;
+	Dictionary payload;
+	payload["available"] = true;
+	payload["sessions"] = sessions;
+	payload["events"] = events;
+	payload["errors"] = errors;
+	payload["warnings"] = warnings;
+	payload["truncated"] = truncated;
 	response["ok"] = true;
-	response["result"] = data;
+	response["result"] = payload;
 	return response;
 }
 
@@ -373,32 +373,32 @@ Dictionary AIAssistantEditorPlugin::panel_snapshot(const String &p_section, int 
 		response["code"] = "invalid_arguments";
 		return response;
 	}
-	Dictionary data;
+	Dictionary payload;
 	EditorDebuggerNode *node = EditorDebuggerNode::get_singleton();
 	if (p_section == "output" && EditorNode::get_singleton() && EditorNode::get_log()) {
-		data = EditorNode::get_log()->get_message_snapshot(p_offset, p_limit);
+		payload = EditorNode::get_log()->get_message_snapshot(p_offset, p_limit);
 	} else if (node && runtime_debugger.is_valid() && p_session < runtime_debugger->get_sessions().size()) {
 		ScriptEditorDebugger *debugger = p_session < 0 ? node->get_current_debugger() : node->get_debugger(p_session);
 		if (debugger) {
-			data = debugger->get_panel_snapshot(p_section, p_offset, p_limit, p_frame, p_monitor);
+			payload = debugger->get_panel_snapshot(p_section, p_offset, p_limit, p_frame, p_monitor);
 			const Array sessions = runtime_debugger->get_sessions();
 			for (int i = 0; i < sessions.size(); i++) {
 				if (node->get_debugger(i) == debugger) {
-					data["session"] = i;
+					payload["session"] = i;
 					break;
 				}
 			}
 		}
 	}
-	if (data.is_empty() || bool(data.get("unsupported", false))) {
+	if (payload.is_empty() || bool(payload.get("unsupported", false))) {
 		response["ok"] = false;
 		response["code"] = "panel_data_unavailable";
 		response["error"] = "Native panel source or session is unavailable.";
 	} else {
-		data["available"] = true;
-		data["offset"] = p_offset;
+		payload["available"] = true;
+		payload["offset"] = p_offset;
 		response["ok"] = true;
-		response["result"] = data;
+		response["result"] = payload;
 	}
 	return response;
 }
