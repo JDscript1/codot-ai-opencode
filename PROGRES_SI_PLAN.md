@@ -1,6 +1,6 @@
 # Godot AI Android — implementări, verificări și plan
 
-Ultima actualizare: **3 noiembrie 2026**.
+Ultima actualizare: **4 noiembrie 2026**.
 
 Acesta este documentul de lucru al proiectului. Se actualizează după fiecare
 etapă importantă: implementare, verificare, compilare sau livrare. „Implementat
@@ -252,6 +252,42 @@ necesită un APK nou; utilizatorul a cerut oprirea compilării până la stabili
 cerințelor. Nu s-a pornit un build nou după această cerere și nu s-a înlocuit
 Download. Cheia de semnare stabilă a fost configurată ca secret GitHub, dar
 instalarea peste aplicația actuală cere o singură dezinstalare.
+
+**Compilare și livrare — 4.11.2026.** Ambele variante au fost compilate din
+`fdf1bb16208da64ed1d52cf3dc3ebd6e4abc8fa5`; toate joburile `runtime`,
+`native-editor` și `android` au încheiat cu succes:
+
+- standard: [workflow
+  `41813810922`](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41813810922),
+  artifact SHA-256 `4bc1ea352ddaee3eed01584164f666c9aa8e1da001521f2a55f8f6540d0e7463`;
+- Ziva: [workflow
+  `41813860548`](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41813860548),
+  artifact SHA-256 `782d08e6c7894514e754225319646e08a540a4648770e1f619d8e24cc4504238`.
+
+Arhivele au trecut `unzip -t`, iar APK-urile extrase au fost verificate prin
+hash-ul intern și cu `apksigner`. Ambele poartă certificatul persistent
+`318daaf4b944551dacf302090011e8e9eb1d1bff2aacb4df0c7dc7f6f7cd91d5` și
+pachetele `com.jdscript.godotai.debug`, respectiv
+`com.jdscript.godotai.ziva.debug`.
+
+- `Godot-AI-Android-arm64-debug.apk`: **441.884.608 bytes**, SHA-256
+  `a624a2b14cbd7a3dccd65f656b08cfe6b36d2e9a9b06aefa5ddcbb78a66816e0`;
+- `Godot-AI-Ziva-arm64-debug.apk`: **747.085.508 bytes**, SHA-256
+  `bb5136bcbde2e433890ecfcf426a3956acc273362351a060c5c26401186d30eb`.
+
+Download conține acum exact o pereche, înlocuită atomic la 12:04 CET, cu
+checksum-uri alăturate; perechea AG-91 a fost arhivată în
+`~/godot-ai-artifacts/ag92b-previous-download/`. APK-ul standard include
+`debian-offline.zip` (377 pachete, inclusiv Blender 4.3.2, python3-numpy și
+ripgrep), Node.js 22.19.0, `pi-coding-agent-1.5.0.tgz` și oferta de sursă GPL
+Blender; varianta Ziva adaugă runtime-ul și addon-ul Ziva.
+
+**Limitare de instalare.** Semnătura aplicației Ziva deja instalate este
+diferită de certificatul persistent. Prima instalare AG-92 peste ea cere
+dezinstalare (cu pierderea datelor aplicației) sau o migrare semnată; nu am
+dezinstalat și nu am instalat nimic. Dispozitivul ADB nu a răspuns la ultima
+verificare (`10.146.52.179:42707`, connection refused), deci proba pe telefon
+rămâne de făcut după reconectare.
 
 ## AG-89 — pachete runtime incluse în APK și actualizare offline — 3.11.2026
 
