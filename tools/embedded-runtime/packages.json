@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "node": {
+    "version": "22.19.0",
+    "url": "https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-arm64.tar.xz",
+    "size": 29167588,
+    "sha256": "0b2d9f564b6594222a62c82e1df2efe119dd4a4aff29644f4dd325bf360b6bcc",
+    "asset": "node-v22.19.0-linux-arm64.tar.xz",
+    "kind": "tar.xz",
+    "guest_directory": "/root/.local/node_modules/node",
+    "strip_components": 1
+  },
+  "pi": {
+    "version": "1.5.0",
+    "url": "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-1.5.0.tgz",
+    "size": 7808113,
+    "sha256": "5bfb66848a4c4b81c637ce8d2136be01945b70aac8e8556b091cb02241b385df",
+    "asset": "pi-coding-agent-1.5.0.tgz",
+    "kind": "tar.gz",
+    "guest_directory": "/root/.local/node_modules/@earendil-works/pi-coding-agent",
+    "strip_components": 1
+  },
+  "debian": {
+    "repository": "https://deb.debian.org/debian",
+    "suite": "trixie",
+    "component": "main",
+    "architecture": "arm64",
+    "packages": [
+      "ca-certificates",
+      "git",
+      "ripgrep",
+      "xz-utils",
+      "python3",
+      "python3-venv",
+      "python3-numpy",
+      "python3-requests",
+      "python3-pil",
+      "blender"
+    ],
+    "ziva_packages": [
+      "libfontconfig1",
+      "fonts-dejavu-core",
+      "libxcb1",
+      "libglib2.0-0t64",
+      "libnss3",
+      "libatk-bridge2.0-0t64",
+      "libcups2t64",
+      "libx11-6",
+      "libxcomposite1",
+      "libxdamage1",
+      "libxext6",
+      "libxfixes3",
+      "libxrandr2",
+      "libgbm1",
+      "libxkbcommon0",
+      "libcairo2",
+      "libpango-1.0-0",
+      "libasound2t64"
+    ],
+    "asset": "debian-offline.zip"
+  },
+  "ziva": {
+    "addon": {
+      "version": "v3.3.3",
+      "url": "https://github.com/ziva-sh/ziva-agent-plugin-godot/releases/download/v3.3.3/ziva-ai-agent-v3.3.3-godot-v4.2.0-linux-arm64.zip",
+      "size": 2944465,
+      "sha256": "1e06bcef313aa092393ea64e4a10202f3077ec5fba223dfd7d42525fec6027c4",
+      "asset": "ziva-ai-agent-v3.3.3-godot-v4.2.0-linux-arm64.zip"
+    },
+    "runtime": {
+      "version": "v3.3.3",
+      "url": "https://github.com/ziva-sh/ziva-agent-plugin-godot/releases/download/v3.3.3/ziva-runtime-v3.3.3-linux-arm64.zip",
+      "size": 224410556,
+      "sha256": "f485f3b0f381fe4ec40b10788f0af62bea487c94ec6d830ec811c09f24f32b39",
+      "asset": "ziva-runtime-v3.3.3-linux-arm64.zip"
+    },
+    "godot": {
+      "version": "4.7.2",
+      "url": "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.arm64.zip",
+      "size": 77008699,
+      "sha256": "5dd0d86405cf7e8adf79fb6377b38ba682a2846cb378ffe5364f38c01ad29b9d",
+      "asset": "Godot_v4.7.2-stable_linux.arm64.zip"
+    }
+  }
+}

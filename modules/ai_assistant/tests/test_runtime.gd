@@ -44,6 +44,29 @@ class NativePanelBridge:
 		calls.append(args)
 		return {"ok": true, "result": {"available": true, "collected": false, "section": section, "items": []}}
 
+class GodotMCPPanelBridge:
+	extends Node
+	var searches = []
+	var executions = []
+	func agent_catalog() -> Array:
+		return [
+			{"name": "editor_capture", "description": "Capture editor pixels", "risk": "read", "parameters": {"type": "object", "properties": {}, "additionalProperties": false}},
+			{"name": "godot_project_map", "description": "Inspect the project map", "risk": "read", "parameters": {"type": "object", "properties": {}}},
+			{"name": "godot_create_node", "description": "Create a scene node", "risk": "write", "parameters": {"type": "object", "properties": {"type": {"type": "string"}}, "required": ["type"]}},
+		]
+	func agent_search(query: String, limit: int = 20) -> Dictionary:
+		searches.append([query, limit])
+		return {"ok": true, "result": [{"name": "godot_create_node", "description": "Create a node", "risk": "write"}]}
+	func agent_describe(name: String) -> Dictionary:
+		if name != "godot_create_node":
+			return {"ok": false, "error": "unknown"}
+		return {"ok": true, "result": {"name": name, "inputSchema": {"type": "object"}}}
+	func agent_execute(name: String, arguments: Dictionary) -> Dictionary:
+		executions.append([name, arguments])
+		if name == "editor_capture":
+			return {"ok": true, "result": {"ok": true}, "images": [{"mimeType": "image/png", "data": "aGVsbG8="}]}
+		return {"ok": true, "result": {"ok": true, "name": name}}
+
 class HarnessHost:
 	extends RefCounted
 	var replies: Array = []
@@ -273,7 +296,7 @@ func _run() -> void:
 		push_error("Pass -- --source=/absolute/path/to/modules/ai_assistant")
 		quit(2)
 		return
-	for name in ["common", "engineering_store", "qa_scenarios", "asset_audit", "experiments", "engineering", "project_knowledge", "diagnostics", "verification", "diff", "change_set", "transport", "tool_registry", "model_pricing", "providers", "panel_reader", "editor_tools", "mcp", "asset_exports", "generation_catalog", "assets", "accounts", "conversations", "icons", "planner", "markdown", "tool_preview", "diagram", "file_registry", "model_preview", "media_view", "chat_view", "harness", "agent_jobs", "speech", "workspace", "termux_blender", "linux_runtime", "ziva", "ziva_screen", "integrations", "store", "editor_control", "panel"]:
+	for name in ["common", "engineering_store", "qa_scenarios", "asset_audit", "experiments", "engineering", "project_knowledge", "diagnostics", "verification", "diff", "change_set", "transport", "tool_registry", "model_pricing", "providers", "panel_reader", "editor_tools", "mcp", "asset_exports", "generation_catalog", "assets", "accounts", "conversations", "icons", "planner", "markdown", "tool_preview", "diagram", "file_registry", "model_preview", "media_view", "chat_view", "harness", "agent_jobs", "speech", "workspace", "termux_blender", "linux_runtime", "ziva", "ziva_screen", "integrations", "store", "editor_control", "godot_mcp", "pi_session", "panel"]:
 		var script = GDScript.new()
 		script.take_over_path("res://__godot_ai_builtin__/" + name + ".gd")
 		script.source_code = FileAccess.get_file_as_string(source_directory.path_join("runtime/" + name + ".gd"))
@@ -282,7 +305,7 @@ func _run() -> void:
 		if error != OK:
 			quit(1)
 			return
-		var bindings = {"common": "Common", "engineering_store": "EngineeringStore", "qa_scenarios": "QAScenarios", "asset_audit": "AssetAudit", "experiments": "Experiments", "engineering": "Engineering", "project_knowledge": "ProjectKnowledge", "diagnostics": "Diagnostics", "verification": "Verification", "diff": "Diff", "change_set": "ChangeSet", "transport": "Transport", "tool_registry": "ToolRegistry", "model_pricing": "ModelPricing", "providers": "Providers", "panel_reader": "PanelReader", "editor_tools": "Tools", "mcp": "MCP", "asset_exports": "AssetExports", "generation_catalog": "GenerationCatalog", "assets": "Assets", "accounts": "Accounts", "conversations": "Conversations", "icons": "Icons", "planner": "Planner", "markdown": "Markdown", "tool_preview": "ToolPreview", "diagram": "Diagram", "file_registry": "FileRegistry", "model_preview": "ModelPreview", "media_view": "MediaView", "chat_view": "ChatView", "harness": "Harness", "agent_jobs": "AgentJobs", "speech": "Speech", "workspace": "Workspace", "termux_blender": "TermuxBlender", "linux_runtime": "LinuxRuntime", "ziva": "Ziva", "ziva_screen": "ZivaScreen", "integrations": "Integrations", "store": "Store", "editor_control": "EditorControl"}
+		var bindings = {"common": "Common", "engineering_store": "EngineeringStore", "qa_scenarios": "QAScenarios", "asset_audit": "AssetAudit", "experiments": "Experiments", "engineering": "Engineering", "project_knowledge": "ProjectKnowledge", "diagnostics": "Diagnostics", "verification": "Verification", "diff": "Diff", "change_set": "ChangeSet", "transport": "Transport", "tool_registry": "ToolRegistry", "model_pricing": "ModelPricing", "providers": "Providers", "panel_reader": "PanelReader", "editor_tools": "Tools", "mcp": "MCP", "asset_exports": "AssetExports", "generation_catalog": "GenerationCatalog", "assets": "Assets", "accounts": "Accounts", "conversations": "Conversations", "icons": "Icons", "planner": "Planner", "markdown": "Markdown", "tool_preview": "ToolPreview", "diagram": "Diagram", "file_registry": "FileRegistry", "model_preview": "ModelPreview", "media_view": "MediaView", "chat_view": "ChatView", "harness": "Harness", "agent_jobs": "AgentJobs", "speech": "Speech", "workspace": "Workspace", "termux_blender": "TermuxBlender", "linux_runtime": "LinuxRuntime", "ziva": "Ziva", "ziva_screen": "ZivaScreen", "integrations": "Integrations", "store": "Store", "editor_control": "EditorControl", "godot_mcp": "GodotMCP", "pi_session": "PiSession"}
 		for dependency in scripts: script.set(bindings[dependency], scripts[dependency])
 		scripts[name] = script
 	var common = scripts["common"]
@@ -328,7 +351,7 @@ func _run() -> void:
 	check(prioritized == ["192.168.3.8", "10.0.0.9", "172.16.2.9"] and providers.lan_targets(prioritized)[0]["host"] == "192.168.3.8", "Wi-Fi subnet is searched before VPN or cellular private addresses")
 	check(not providers.detect("sk-generic-fixture").get("ok", false), "Ambiguous keys never trigger issuer guessing")
 	check(providers.detect("DEEPSEEK_API_KEY=sk-generic-fixture").get("profile", {}).get("id") == "deepseek", "Labeled key determines issuer")
-	check(providers.detect("OPENCODE_API_KEY=sk-generic-fixture").get("profile", {}).get("id") == "opencode" and providers.detect("OPENCODE_ZEN_API_KEY=sk-generic-fixture").get("profile", {}).get("id") == "opencode", "OpenCode labels select the OpenCode Zen provider without guessing ambiguous raw keys")
+	check(providers.detect("OPENCODE_API_KEY=sk-generic-fixture").get("profile", {}).get("id") == "opencode" and providers.detect("OPENCODE_ZEN_API_KEY=sk-generic-fixture").get("profile", {}).get("id") == "opencode", "OpenCode labels select OpenCode Zen without guessing ambiguous raw keys")
 	var messages = [{"role": "system", "content": "Inspect"}, {"role": "user", "content": "Create"}, {"role": "assistant", "content": "", "reasoning_content": "Retained reasoning", "tool_calls": [{"id": "a", "name": "godot_project", "arguments": {}}]}, {"role": "tool", "tool_call_id": "a", "tool_name": "godot_project", "content": "{}"}]
 	var chat = providers.build_request("chat", messages, [], "fixture")
 	check(chat["body"]["messages"][2]["tool_calls"][0]["function"]["name"] == "godot_project", "Preserve multi-turn chat tool calls")
@@ -349,9 +372,12 @@ func _run() -> void:
 	check(auth._parse_query("client_id=oaiapp_test")["client_id"] == "oaiapp_test", "Issued client ID is retained")
 	check(auth._unbase64url(auth._base64url(PackedByteArray([0, 255, 128]))) == PackedByteArray([0, 255, 128]), "PKCE/base64url round trip")
 	var oauth = auth.authorization_parameters({"name": "ChatGPT · user@example.test", "client_id": "oaiapp_fixture", "host_id": "urn:uuid:fixture"}, {"client_id": "oaiapp_fixture", "id_token": "fixture-id-token"}, "http://127.0.0.1:1455/auth/callback", "state", "nonce", "verifier")
-	check(oauth["client_id"] == "oaiapp_fixture" and oauth["id_token_hint"] == "fixture-id-token" and oauth["login_hint"] == "user@example.test" and not oauth.has("agent_name_hint"), "Returning ChatGPT authorization skips registration and sends retained account hints")
+	check(oauth["client_id"] == "oaiapp_fixture" and oauth["login_hint"] == "user@example.test" and not oauth.has("id_token_hint") and not oauth.has("agent_name_hint"), "Returning ChatGPT authorization reuses the issued client ID without exposing a saved token in the browser URL")
 	var fresh = auth.authorization_parameters({"name": "ChatGPT", "host_id": "urn:uuid:fixture"}, null, "http://127.0.0.1:1455/auth/callback", "state", "nonce", "verifier")
 	check(fresh["client_id"] == "dynamic_agent_client" and fresh["agent_name_hint"] == "Godot AI" and not fresh.has("id_token_hint"), "First ChatGPT authorization performs dynamic registration without stale hints")
+	var email_hint = auth.authorization_parameters({"name": "ChatGPT", "client_id": "oaiapp_fixture", "host_id": "urn:uuid:fixture"}, {"client_id": "oaiapp_fixture", "email": "saved@example.test"}, "http://127.0.0.1:1455/auth/callback", "state", "nonce", "verifier")
+	check(email_hint.get("login_hint") == "saved@example.test", "Returning ChatGPT authorization uses the saved verified email")
+	check(auth._oauth_failure({"json": {"error": {"message": "invalid_grant"}}}) == "invalid_grant" and auth._oauth_failure({"status": 403}) == "HTTP 403", "ChatGPT OAuth failures retain a safe provider diagnostic")
 	var panel = scripts["panel"].new()
 	panel.history = messages.duplicate(true)
 	panel.history.append({"role": "assistant", "content": "", "tool_calls": [{"id": "interrupted", "name": "godot_run", "arguments": {}}]})
@@ -393,10 +419,13 @@ func _run() -> void:
 		await _network_tests(node)
 		await _local_connection_tests(node)
 		await _omniroute_tests(node)
+		await _meta_tests(node)
 		await _opencode_tests(node)
 		await _cloud_generation_tests(node)
 		await _integration_tests(node)
 		await _store_tests(node)
+	_pi_session_tests()
+	await _godot_mcp_tests()
 	node.queue_free()
 	await process_frame
 	print("Godot AI: %s assertions, %s failures" % [assertions, failures])
@@ -1638,7 +1667,7 @@ func _harness_tests(node: Node) -> void:
 			var content = str(messages[index]["content"])
 			total += content.length()
 			var parsed: Variant = JSON.parse_string(content)
-			valid_contracts = valid_contracts and parsed is Dictionary and parsed.get("ok") == not failed and content.length() <= 24000
+			valid_contracts = valid_contracts and parsed is Dictionary and parsed.get("ok") == (not failed) and content.length() <= 24000
 			if failed: valid_contracts = valid_contracts and parsed.get("code") == "fixture_failure" and parsed.get("error") == "Fixture failure [redacted]"
 			identities = identities and messages[index].get("tool_call_id") == batch_calls[index - 1]["id"] and parsed.get("result", {}).get("id") == "existing-job"
 			var approval: Dictionary = parsed.get("approval", {})
@@ -1848,6 +1877,40 @@ func _omniroute_tests(node: Node) -> void:
 	var answer = await service.complete(profile, [{"role": "user", "content": "Ping"}], [], "fixture-route-chat", "", {})
 	check(answer.get("ok", false) and answer.get("message", {}).get("content") == "OmniRoute chat", "OmniRoute completes through the OpenAI-compatible chat endpoint with its saved key")
 
+func _meta_tests(node: Node) -> void:
+	var script = scripts["providers"]
+	check(script.detect("LLM_fixture-key").get("profile", {}).get("id") == "meta", "An LLM_ key selects Meta Model API")
+	check(script.detect("MODEL_API_KEY=LLM_fixture-key").get("profile", {}).get("id") == "meta", "The official MODEL_API_KEY label selects Meta Model API")
+	check(script.detect("META_API_KEY=LLM_fixture-key").get("profile", {}).get("id") == "meta", "META_API_KEY selects Meta Model API")
+	var meta_entry = {}
+	for entry in script.CATALOG:
+		if entry["id"] == "meta": meta_entry = entry
+	check(meta_entry.get("name") == "Meta Model API" and meta_entry.get("kind") == "responses" and meta_entry.get("url") == "https://api.meta.ai/v1", "Meta Model API is a cloud Responses provider with the official base URL")
+	check(script.endpoint({"issuer": "meta", "url": ""}).get("result") == "https://api.meta.ai/v1", "An empty Meta endpoint restores the official Model API URL")
+	check(script.model_target({"issuer": "meta", "kind": "responses", "url": "https://api.meta.ai/v1"}, "muse-spark-1.3-contributor").get("result", {}).get("kind") == "responses", "Meta coding models route through the Responses API")
+	var vault = FakeVault.new()
+	var service = script.new(node, vault)
+	var profile = {"id": "meta", "issuer": "meta", "name": "Meta Model API", "kind": "responses", "url": mock_url + "/meta/v1", "allow_http": true}
+	check(int((await service.list_models(profile)).get("status", 0)) == 401, "Meta model discovery exposes an invalid or missing API key")
+	vault.store("meta", "meta-fixture-key")
+	var listed = await service.list_models(profile)
+	check(listed.get("ok", false) and listed.get("result", []).size() == 4, "Meta discovery keeps Muse coding models and skips image, voice and segmentation models")
+	var by_id = {}
+	for model in listed.get("result", []): by_id[str(model.get("id", ""))] = model
+	var contributor = by_id.get("muse-spark-1.3-contributor", {})
+	var standard = by_id.get("muse-spark-1.3", {})
+	check(contributor.get("name") == "Muse Spark 1.3 Contributor" and contributor.get("context") == 1048576 and contributor.get("max_output_tokens") == 131072, "Muse Spark 1.3 Contributor keeps the published 1M context and output limits")
+	check(contributor.get("capabilities", {}).get("vision", false) and contributor.get("capabilities", {}).get("tools", false) and contributor.get("capabilities", {}).get("reasoning", false), "Meta coding models advertise image input, tools and reasoning")
+	check(not "max" in contributor.get("efforts", []) and "max" in standard.get("efforts", []), "Contributor mode excludes max reasoning while Standard Muse Spark 1.3 supports it")
+	check(is_equal_approx(contributor.get("pricing", {}).get("input", 0.0), 0.1) and is_equal_approx(contributor.get("pricing", {}).get("output", 0.0), 0.2) and is_equal_approx(contributor.get("pricing", {}).get("cached_input", 0.0), 0.002), "Muse Spark Contributor uses the official per-million token rates")
+	check(is_equal_approx(standard.get("pricing", {}).get("input", 0.0), 1.25) and is_equal_approx(standard.get("pricing", {}).get("output", 0.0), 4.25) and is_equal_approx(standard.get("pricing", {}).get("cached_input", 0.0), 0.15), "Muse Spark Standard uses the official per-million token rates")
+	check(is_equal_approx(by_id.get("muse-wonder-1.0", {}).get("pricing", {}).get("input", 0.0), 4.0) and is_equal_approx(by_id.get("muse-wonder-1.0", {}).get("pricing", {}).get("output", 0.0), 20.0), "Muse Wonder pricing is shown separately from Muse Spark")
+	var retained = listed.get("result", []).duplicate(true)
+	scripts["model_pricing"].new(node).apply({"issuer": "meta", "kind": "responses", "official_pricing": true}, retained)
+	check(not retained.is_empty() and retained[0].get("pricing", {}).get("input", 0.0) > 0, "Meta's documented token rates survive the pricing cache pass")
+	var icon_data: Dictionary = scripts["icons"].get_script_constant_map().get("DATA", {})
+	check(icon_data.has("Provider_meta"), "Meta Model API has a pinned provider icon")
+
 func _opencode_tests(node: Node) -> void:
 	var script = scripts["providers"]
 	var vault = FakeVault.new()
@@ -1855,37 +1918,37 @@ func _opencode_tests(node: Node) -> void:
 	vault.store("opencode", "opencode-fixture-token")
 	var profile = {"id": "opencode", "issuer": "opencode", "name": "OpenCode Zen", "kind": "chat", "url": mock_url + "/opencode/zen/v1", "allow_http": true}
 	var listed = await service.list_models(profile)
-	check(listed.get("ok", false) and listed.get("result", []).size() == 4, "OpenCode model discovery keeps supported chat models and skips embeddings or unknown protocols")
+	check(listed.get("ok", false) and listed.get("result", []).size() == 4, "Pi model discovery keeps supported chat models and skips embeddings or unknown protocols")
 	var by_id = {}
 	for model in listed.get("result", []): by_id[str(model.get("id", ""))] = model
-	check(by_id.get("fixture-open-chat", {}).get("protocol") == "chat-completions" and by_id.get("fixture-open-responses", {}).get("protocol") == "responses", "OpenCode catalog retains chat and Responses routing metadata")
-	check(by_id.get("fixture-open-messages", {}).get("protocol") == "messages" and by_id.get("fixture-open-gemini", {}).get("protocol") == "generate-content", "OpenCode catalog retains Anthropic and Gemini routing metadata")
-	check(by_id.get("fixture-open-chat", {}).get("capabilities", {}).get("vision", false) and by_id.get("fixture-open-chat", {}).get("context") == 200000 and by_id.get("fixture-open-chat", {}).get("efforts") == ["low", "high"], "OpenCode models preserve image support, context and reasoning levels")
-	check(by_id.get("fixture-open-chat", {}).get("reasoning_field") == "reasoning_content", "OpenCode preserves the reasoning replay field declared by chat models")
-	check(by_id.get("fixture-open-chat", {}).get("pricing", {}).get("input") == 1.5 and by_id.get("fixture-open-chat", {}).get("pricing", {}).get("output") == 9, "OpenCode model discovery applies inline API tariffs")
+	check(by_id.get("fixture-open-chat", {}).get("protocol") == "chat-completions" and by_id.get("fixture-open-responses", {}).get("protocol") == "responses", "Pi catalog retains chat and Responses routing metadata")
+	check(by_id.get("fixture-open-messages", {}).get("protocol") == "messages" and by_id.get("fixture-open-gemini", {}).get("protocol") == "generate-content", "Pi catalog retains Anthropic and Gemini routing metadata")
+	check(by_id.get("fixture-open-chat", {}).get("capabilities", {}).get("vision", false) and by_id.get("fixture-open-chat", {}).get("context") == 200000 and by_id.get("fixture-open-chat", {}).get("efforts") == ["low", "high"], "Pi models preserve image support, context and reasoning levels")
+	check(by_id.get("fixture-open-chat", {}).get("reasoning_field") == "reasoning_content", "Pi preserves the reasoning replay field declared by chat models")
+	check(by_id.get("fixture-open-chat", {}).get("pricing", {}).get("input") == 1.5 and by_id.get("fixture-open-chat", {}).get("pricing", {}).get("output") == 9, "Pi model discovery applies inline API tariffs")
 	var routed = profile.merged({"models": listed.get("result", [])}, true)
 	var expected = {"fixture-open-chat": "chat", "fixture-open-responses": "responses", "fixture-open-messages": "anthropic", "fixture-open-gemini": "gemini"}
 	for id in expected:
 		var target = script.model_target(routed, id)
-		check(target.get("ok", false) and target.get("result", {}).get("kind") == expected[id], "OpenCode maps " + id + " to its native protocol")
+		check(target.get("ok", false) and target.get("result", {}).get("kind") == expected[id], "Pi maps " + id + " to its native protocol")
 	var fake = OpenCodeTransport.new()
 	service.transport = fake
 	var answers = {"fixture-open-chat": "OpenCode chat", "fixture-open-responses": "OpenCode responses", "fixture-open-messages": "OpenCode messages", "fixture-open-gemini": "OpenCode gemini"}
 	for id in answers:
 		var answer = await service.complete(routed, [{"role": "user", "content": "Ping"}], [], id, "", {})
-		check(answer.get("ok", false) and answer.get("message", {}).get("content") == answers[id], "OpenCode completes through " + expected[id])
-	check(fake.requests.size() == 4 and str(fake.requests[0]["url"]).ends_with("/openai/v1/chat/completions") and str(fake.requests[1]["url"]).ends_with("/openai/v1/responses"), "OpenCode uses each model's OpenAI-compatible endpoint and path")
-	check(str(fake.requests[2]["url"]).ends_with("/anthropic/v1/messages") and ":streamGenerateContent" in str(fake.requests[3]["url"]), "OpenCode uses the declared Anthropic and Gemini endpoints")
+		check(answer.get("ok", false) and answer.get("message", {}).get("content") == answers[id], "Pi completes through " + expected[id])
+	check(fake.requests.size() == 4 and str(fake.requests[0]["url"]).ends_with("/openai/v1/chat/completions") and str(fake.requests[1]["url"]).ends_with("/openai/v1/responses"), "Pi uses each model's OpenAI-compatible endpoint and path")
+	check(str(fake.requests[2]["url"]).ends_with("/anthropic/v1/messages") and ":streamGenerateContent" in str(fake.requests[3]["url"]), "Pi uses the declared Anthropic and Gemini endpoints")
 	check(fake.requests.all(func(request: Dictionary) -> bool: return "Authorization: Bearer opencode-fixture-token" in request["headers"]), "OpenCode sends its API key as Bearer on every supported protocol")
-	check("anthropic-version: 2023-06-01" in fake.requests[2]["headers"] and not "anthropic-version: 2023-06-01" in fake.requests[0]["headers"], "OpenCode adds the Anthropic version only on its messages route")
+	check("anthropic-version: 2023-06-01" in fake.requests[2]["headers"] and not "anthropic-version: 2023-06-01" in fake.requests[0]["headers"], "Pi adds the Anthropic version only on its messages route")
 	var reasoning_messages = [{"role": "user", "content": "Use the fixture tool"}, {"role": "assistant", "content": "", "wire_source": "opencode:fixture-open-chat", "tool_calls": [{"id": "reasoning-call", "name": "fixture", "arguments": {}}]}, {"role": "tool", "tool_call_id": "reasoning-call", "tool_name": "fixture", "content": "{}"}]
 	var reasoning_answer = await service.complete(routed, reasoning_messages, [scripts["common"].tool("fixture", "Fixture", {}, [])], "fixture-open-chat", "", {})
-	check(reasoning_answer.get("ok", false) and fake.requests[-1]["body"]["messages"][1].has("reasoning_content"), "OpenCode chat tool loops replay an empty reasoning field when the prior turn did not retain one")
+	check(reasoning_answer.get("ok", false) and fake.requests[-1]["body"]["messages"][1].has("reasoning_content"), "Pi chat tool loops replay an empty reasoning field when the prior turn did not retain one")
 	var unsafe_models: Array = listed.get("result", []).duplicate(true)
 	unsafe_models.append({"id": "fixture-open-unsafe", "protocol": "chat-completions", "transport_url": "https://attacker.example/v1"})
 	var unsafe = routed.merged({"models": unsafe_models}, true)
 	var rejected = await service.complete(unsafe, [{"role": "user", "content": "Ping"}], [], "fixture-open-unsafe", "", {})
-	check(rejected.get("code") == "unsupported_model_protocol" and fake.requests.size() == 5, "OpenCode model routing rejects an untrusted endpoint before sending credentials")
+	check(rejected.get("code") == "unsupported_model_protocol" and fake.requests.size() == 5, "Pi model routing rejects an untrusted endpoint before sending credentials")
 
 func _network_tests(node: Node) -> void:
 	var vault = FakeVault.new()
@@ -2000,6 +2063,109 @@ func _network_tests(node: Node) -> void:
 	if bad_submit.get("ok", false):
 		var missing = await assets.refresh(str(bad_submit["result"]["id"]), bad_profile, {})
 		check(missing.get("code") == "missing_artifact", "Completed workflows with wrong output bindings fail explicitly")
+
+func _pi_session_tests() -> void:
+	var script = scripts["pi_session"]
+	var session = script.new()
+	var vault = FakeVault.new()
+	vault.store("cloud", "cloud-key")
+	vault.store("oc", "oc-key")
+	var profiles = [
+		{"id": "cloud", "name": "Cloud", "issuer": "deepseek", "kind": "chat", "url": "https://api.example.test/v1", "models": [{"id": "cloud-m", "name": "Cloud M", "context": 1000, "max_output_tokens": 100, "efforts": ["high"], "capabilities": {"vision": true, "reasoning": true}}]},
+		{"id": "local", "name": "Local", "issuer": "lmstudio", "kind": "chat", "url": "http://192.168.1.2:1234/v1", "local": true, "models": [{"id": "local-m"}]},
+		{"id": "siwc", "name": "ChatGPT", "kind": "siwc", "url": "https://api.openai.com/v1", "models": [{"id": "oauth-model"}]},
+		{"id": "oc", "name": "OpenCode Zen", "issuer": "opencode", "kind": "chat", "url": "https://opencode.ai/zen/v1", "models": [{"id": "chat", "protocol": "chat-completions", "transport_url": "https://opencode.ai/inference/openai/v1"}, {"id": "messages", "protocol": "messages", "transport_url": "https://opencode.ai/inference/anthropic/v1"}]},
+	]
+	var providers = session.build_profiles(profiles, vault)
+	check(providers.size() == 4, "Pi materializes API and local profiles, groups OpenCode protocols and skips SIWC")
+	var by_id = {}
+	for provider in providers: by_id[str(provider["id"])] = provider
+	var cloud_target = session.target("cloud", "cloud-m")
+	check(cloud_target.get("model") == "cloud-m" and by_id[cloud_target["provider"]]["key"] == "cloud-key" and by_id[cloud_target["provider"]]["models"][0]["input"] == ["text", "image"], "Pi provider bridge preserves app keys and model capabilities")
+	var local_target = session.target("local", "local-m")
+	check(local_target.get("model") == "local-m" and by_id[local_target["provider"]]["key"] == "pi-local", "Pi local profiles use a non-secret dummy key")
+	var messages_target = session.target("oc", "messages")
+	check(messages_target.get("model") == "messages" and by_id[messages_target["provider"]]["api"] == "anthropic-messages" and by_id[messages_target["provider"]]["base_url"] == "https://opencode.ai/inference/anthropic/v1", "Pi maps OpenCode per-model protocols and transport URLs")
+	check(session.target("siwc", "oauth-model").is_empty(), "Pi does not materialize ChatGPT SIWC profiles")
+	vault.store("cloud", "cloud-key-new")
+	profiles[0]["models"].append({"id": "cloud-new", "name": "Cloud New"})
+	providers = session.build_profiles(profiles, vault)
+	var refreshed = session.target("cloud", "cloud-new")
+	var refreshed_provider = {}
+	for provider in providers:
+		if provider["id"] == refreshed.get("provider", ""): refreshed_provider = provider
+	check(refreshed.get("model") == "cloud-new" and refreshed_provider.get("key") == "cloud-key-new", "Rebuilding Pi profiles applies changed keys and newly added models")
+	vault.erase("cloud")
+	session.build_profiles(profiles, vault)
+	check(session.target("cloud", "cloud-m").is_empty(), "Removing a cloud key invalidates its Pi route instead of reusing stale credentials")
+	vault.store("space / id", "space-key")
+	profiles.append({"id": "space / id", "name": "Space", "issuer": "custom", "kind": "chat", "url": "https://space.example/v1", "models": [{"id": "space-m"}]})
+	providers = session.build_profiles(profiles, vault)
+	var spaced = session.target("space / id", "space-m")
+	var provider_pattern = RegEx.new()
+	provider_pattern.compile("^[A-Za-z0-9._-]{1,96}$")
+	check(not spaced.is_empty() and provider_pattern.search(str(spaced.get("provider", ""))) != null, "Pi provider IDs are sanitized to the identifier syntax required by the native configuration writer")
+
+func _godot_mcp_tests() -> void:
+	var mcp = scripts["godot_mcp"].new()
+	var bridge = GodotMCPPanelBridge.new()
+	mcp.panel = bridge
+	mcp.token = "a".repeat(64)
+	mcp.session_id = "fixture-session"
+	var unauthorized = await mcp._handle({"method": "POST", "path": "/mcp", "headers": {},
+		"body": JSON.stringify({"jsonrpc": "2.0", "id": 1, "method": "initialize"}).to_utf8_buffer()})
+	check(unauthorized.begins_with("HTTP/1.1 401") and not unauthorized.contains("serverInfo"), "MCP rejects missing bearer tokens")
+	var initialized = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+		"params": {"protocolVersion": "2025-11-25"}}, mcp.token))
+	check(initialized.begins_with("HTTP/1.1 200") and initialized.contains("\"protocolVersion\":\"2025-11-25\""), "MCP negotiates the V2 protocol revision")
+	var listed = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, mcp.token))
+	check(listed.contains("\"name\":\"godot_create_node\"") and not listed.contains("\"name\":\"search\""), "MCP advertises the Godot catalog as direct tools for Pi's native tool_search")
+	var captured = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+		"params": {"name": "editor_capture", "arguments": {}}}, mcp.token))
+	check(bridge.executions == [["editor_capture", {}]], "MCP calls preserve direct Godot tool names and arguments")
+	check(captured.count("\"type\":\"image\"") == 1 and captured.count("aGVsbG8=") == 1, "Captures return one MCP image block, not duplicated base64 text")
+	var chunked_body = JSON.stringify({"jsonrpc": "2.0", "id": 5, "method": "ping"})
+	var parsed = mcp._parse_http(_mcp_chunked(chunked_body))
+	check(parsed.get("method") == "POST" and parsed.get("body", PackedByteArray()).get_string_from_utf8() == chunked_body, "Chunked JSON-RPC request bodies are decoded")
+	var partial = PackedByteArray("POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 50\r\n\r\n{}".to_utf8_buffer())
+	check(mcp._parse_http(partial).is_empty(), "Incomplete HTTP bodies wait for more bytes")
+	var panel = scripts["panel"].new()
+	check(panel._agent_mcp_exposed("godot_call") and panel._agent_mcp_exposed("godot_describe"), "Agent AI reaches the full Godot reflection surface")
+	check(panel._agent_mcp_exposed("agent_spawn") and panel._agent_mcp_exposed("linux_execute") and panel._agent_mcp_exposed("ziva_task") and panel._agent_mcp_exposed("ziva_stop") and panel._agent_mcp_exposed("editor_capture") and panel._agent_mcp_exposed("godot_create_node") and panel._agent_mcp_exposed("godot_changes_apply"), "Agent AI reaches the complete app tool catalog")
+	var blender_pending = panel.Integrations.definitions(false, true, false, true, false)
+	check(blender_pending.any(func(item: Dictionary) -> bool: return item.name == "blender_status") and blender_pending.any(func(item: Dictionary) -> bool: return item.name == "blender_prepare") and not blender_pending.any(func(item: Dictionary) -> bool: return item.name == "blender_run"), "Bundled Blender exposes status and local preparation before the package is ready")
+	var blender_ready = panel.Integrations.definitions(false, true, false, true, true)
+	check(blender_ready.any(func(item: Dictionary) -> bool: return item.name == "blender_run"), "Bundled Blender exposes Python execution only after readiness")
+	var effective = panel._pi_effective_tool("mcp__godot__call", {"name": "godot_write_file", "arguments": {"path": "res://fixture.gd"}})
+	check(effective.get("name") == "godot_write_file" and effective.get("arguments", {}).get("path") == "res://fixture.gd", "Pi MCP meta-calls are normalized to the real app tool for logs and history")
+	var direct = panel._pi_effective_tool("mcp__godot__godot_write_file", {"path": "res://fixture.gd"})
+	check(direct.get("name") == "godot_write_file" and direct.get("arguments", {}).get("path") == "res://fixture.gd", "Direct MCP tool calls are normalized to the app tool name for logs and history")
+	var parsed_result = panel._pi_tool_result({"content": [{"type": "text", "text": "{\"ok\":true,\"result\":{\"path\":\"res://fixture.gd\"}}"}]}, false)
+	check(parsed_result.get("ok", false) and parsed_result.get("result", {}).get("path") == "res://fixture.gd", "Pi MCP text results retain the app's structured result instead of a nested transport payload")
+	var failed_result = panel._pi_tool_result({"content": [{"type": "text", "text": "{\"ok\":true}"}]}, true)
+	check(not failed_result.get("ok", true), "Pi tool errors override an optimistic nested payload")
+	var usage = panel._pi_normalize_usage({"input": 10, "output": 2, "cacheRead": 3, "cacheWrite": 1, "totalTokens": 16})
+	check(usage.get("input_tokens") == 14 and usage.get("output_tokens") == 2 and usage.get("cache_read_input_tokens") == 3 and usage.get("total_tokens") == 16, "Pi usage is translated to the app's context meter without dropping cache reads")
+	panel.free()
+	mcp.read_only = true
+	var plan_tools = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 6, "method": "tools/list"}, mcp.token))
+	check(plan_tools.contains("\"name\":\"godot_project_map\"") and not plan_tools.contains("\"name\":\"godot_create_node\""), "Plan MCP exposes only read-only direct tools")
+	var blocked = await mcp._handle(_mcp_request({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "godot_create_node", "arguments": {}}}, mcp.token))
+	check(blocked.contains("read-only"), "Plan MCP rejects calls")
+
+func _mcp_request(message: Dictionary, token: String) -> Dictionary:
+	return {"method": "POST", "path": "/mcp", "headers": {"authorization": "Bearer " + token,
+		"content-type": "application/json"}, "body": JSON.stringify(message).to_utf8_buffer()}
+
+func _mcp_chunked(body: String) -> PackedByteArray:
+	var output := PackedByteArray()
+	for offset in range(0, body.length(), 7):
+		var part := body.substr(offset, 7)
+		output.append_array(("%x\r\n" % part.length()).to_utf8_buffer())
+		output.append_array(part.to_utf8_buffer())
+		output.append_array("\r\n".to_utf8_buffer())
+	output.append_array("0\r\n\r\n".to_utf8_buffer())
+	return "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nTransfer-Encoding: chunked\r\n\r\n".to_utf8_buffer() + output
 
 func _new_feature_tests() -> void:
 	var common = scripts["common"]

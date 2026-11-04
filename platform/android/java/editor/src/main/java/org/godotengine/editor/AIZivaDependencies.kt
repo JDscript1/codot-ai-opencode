@@ -7,9 +7,7 @@ import java.io.File
 class AIZivaDependencies(
     private val root: File,
     private val execute: (List<String>, Int) -> JSONObject,
-    private val prepareNetwork: () -> Unit = {},
     private val extension: String = EXTENSION,
-    private val progress: (String) -> Unit = {},
 ) {
     companion object {
         val PACKAGES = listOf("libfontconfig1", "fonts-dejavu-core", "libxcb1", "libglib2.0-0t64", "libnss3",
@@ -33,18 +31,4 @@ class AIZivaDependencies(
         return missing.toList()
     }
 
-    fun ensure() {
-        if (missing().isEmpty()) return
-        progress("Pregătesc bibliotecile Linux necesare interfeței oficiale Ziva…")
-        prepareNetwork()
-        val update = execute(listOf("/usr/bin/apt-get", "-o", "APT::Update::Error-Mode=any", "update"), 300)
-        check(update.optInt("exit_code", -1) == 0) {
-            "Nu pot descărca bibliotecile Ziva. Verifică rețeaua, revino în aplicație și reia instalarea."
-        }
-        val install = execute(listOf("/usr/bin/apt-get", "install", "-y", "--no-install-recommends") + PACKAGES, 1200)
-        check(install.optInt("exit_code", -1) == 0) { "Instalarea bibliotecilor Linux pentru Ziva a eșuat. Reia instalarea." }
-        val remaining = missing()
-        check(remaining.isEmpty()) { "Biblioteci Ziva indisponibile: ${remaining.take(5).joinToString(", ")}" }
-        execute(listOf("/usr/bin/apt-get", "clean"), 30)
-    }
 }

@@ -1,12 +1,766 @@
 # Godot AI Android — implementări, verificări și plan
 
-Ultima actualizare: **2 noiembrie 2026**.
+Ultima actualizare: **4 noiembrie 2026**.
 
 Acesta este documentul de lucru al proiectului. Se actualizează după fiecare
 etapă importantă: implementare, verificare, compilare sau livrare. „Implementat
 în surse”, „testat în editor”, „compilat în APK” și „verificat pe dispozitiv”
 sunt stări distincte. Un plan sau un test cu furnizor simulat nu este prezentat
 drept funcție validată cu un serviciu real.
+
+## AG-88 — diagnostic și corecții pentru conectarea ChatGPT — 3.11.2026
+
+**Defect raportat.** După „Conectează ChatGPT”, browserul afișează pagina de
+consimțământ OpenAI, iar butonul rămâne în spinner. Aplicația nu primește
+callback-ul OAuth și rămâne în așteptare.
+
+**Dovezi.** Capturile din `.cache/godot-ai-logs/device/` arată identitatea
+`Tudor Elena Diana` și cardul „Plan ChatGPT”, dar butonul de continuare este
+blocat în spinner. Requestul ajunge la `auth.openai.com`; nu este o eroare de
+callback local. Profilul vechi avea `client_id` emis `oaiapp_...`, iar tokenurile
+erau prezente în vault la încercarea anterioară.
+
+**Corectat în surse.**
+
+- fluxul de autorizare nu mai trimite `id_token_hint` în URL-ul browserului;
+  păstrează `login_hint` și clientul emis, ca implementarea oficială SIWC;
+- callback-ul folosește preferențial portul stabil `1455`; dacă portul este
+  ocupat, încearcă portul salvat anterior, apoi un port liber;
+- `client_id` și `redirect_uri` sunt salvate imediat după callback, înainte de
+  schimbul codului, iar profilul nou este persistat înainte de deschiderea
+  browserului; un cod expirat nu mai pierde înregistrarea;
+- răspunsul de token include diagnostic util (`invalid_grant`, HTTP status)
+  fără tokenuri sau secrete;
+- după 45 de secunde, aplicația afișează instrucțiuni pentru spinner: Chrome
+  Incognito, dezactivarea adblock/VPN și verificarea unui plan Plus/Pro eligibil;
+- butonul **Reînregistrează ChatGPT** elimină numai profilul și tokenul SIWC
+  vechi, apoi pornește o înregistrare dynamică nouă.
+
+**Verificat local.** `gdparse` pe `accounts.gd`, `panel.gd` și
+`test_runtime.gd`; testele OAuth au fost actualizate pentru absența
+`id_token_hint`, `login_hint` salvat și diagnosticul de eroare.
+
+**Verificat în CI și în APK.** Workflow-urile
+[41665900808](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41665900808)
+și [41665902253](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41665902253)
+au trecut integral (`runtime`, `native-editor`, `android`). Artefactele sunt
+`13246307979` și `13244538751`.
+
+- standard: 112.631.150 bytes, SHA-256
+  `9d5d886609616d43d45a73ecbccbd735e940441597d4ee38bac238b59e8166ac`,
+  certificat `dd5ff2be5bcebdeed46b4ce3114c4530e65972471f27f0cde82b5e6261c8650e`;
+- Ziva: 112.632.646 bytes, SHA-256
+  `9ab685d5cb1682b048fce9038df17cc4eba136336557e0e45ffd3f39a3524f1c`,
+  certificat `9927ab38f970737da118db098541ed845bace1e271de8b85c79acb4898fce38f`;
+- ambele au 46 de scripturi încorporate, callback-ul `1455`, butonul de
+  reînregistrare și diagnosticul OAuth; `id_token_hint` nu mai apare în surse;
+- Download a fost înlocuit atomic la **3.11.2026, 17:27:33 CET**; copiile
+  anterioare din `9fb15f9f16` sunt în
+  `~/godot-ai-artifacts/siwc-87563a46cd/previous/`.
+
+**Neefectuat încă.** Proba live după noul APK, confirmarea planului ChatGPT
+eligibil și comportamentul browserului Android. Pagina de consent rămâne sub
+controlul OpenAI; dacă spinnerul persistă și în Incognito, fără adblock/VPN,
+problema este upstream sau ține de eligibilitatea contului, nu de listener-ul
+local.
+
+## AG-90 — suită AAA, Blender bundled și control complet — 3.11.2026
+
+**Cerință nouă.** Blender CLI trebuie să facă parte din suita aplicației și să
+fie livrat în APK, fără descărcare ulterioară. Agenții care rulează prin
+harness-ul nativ trebuie să controleze Blender, Ziva, Godot, generatoarele de
+imagini/3D și restul uneltelor. Se cere un inventar complet și construcție pe
+etape, iar la final Termux se curăță de duplicate și fișiere inutile.
+
+**Inventar.** Lista completă, diferențele și etapele sunt în
+`docs/TOOL_SUITE_ROADMAP.md`. Sunt inventariate uneltele Godot de proiect,
+cod, scene, resurse, editor, debugger, QA, experimente, profilare, imagini/3D,
+store, GitHub, Linux, planificare, memorie, skills, Ziva și Blender.
+
+**Implementat în surse, în această etapă.**
+
+- Identitatea modelului este acum Agent AI. Promptul propriu `SYSTEM.md`
+  înlocuiește identitatea implicită a runtime-ului, iar mesajele de stare nu
+  mai spun că agentul este Pi sau că Pi gândește.
+- `godot_describe` și `godot_call` nu mai sunt blocate de puntea MCP; Agent AI
+  poate inspecta și controla suprafețele Godot reflectate, nu doar uneltele cu
+  nume fix.
+- Ziva are unelte de stare, pornire, oprire, repornire, instalare, actualizare,
+  anulare, răspuns la permisiuni și răspuns/reject la întrebări. Rutele native
+  sunt `permissions/reply`, `questions/reply` și `questions/reject`.
+- Blender rămâne disponibil prin conectorul existent în această etapă. Blender
+  bundled și backend-ul direct sunt etapa următoare, nu sunt marcate ca
+  finalizate.
+
+**Analiză Blender pentru APK.** Debian trixie oferă `blender 4.3.2+dfsg-2`
+pentru arm64. Rezolvarea offline găsește **351 pachete**, aproximativ **262 MB
+comprimat**; amprenta dezarhivată și timpul de instalare trebuie măsurate în CI
+înainte de includere. O variantă oficială Blender ARM64 poate fi evaluată dacă
+dimensiunea sau licența o justifică.
+
+**Verificat local.** `gdparse` pe `panel.gd`, `godot_mcp.gd`, `pi_session.gd`,
+testul runtime și fixture; testele Python statice pentru Pi/agent și pachete
+au trecut. Nu există încă un APK construit după aceste modificări și nicio
+probă live cu furnizori, Ziva sau Blender.
+
+**Neefectuat.** Compilarea APK pentru etapa curentă, bundling-ul Blender,
+uneltele directe `blender_*`, pipeline-ul de asseturi, testarea AAA și
+curățarea Termux. Curățarea Termux se face numai după ce funcțiile echivalente
+sunt app-native și verificate pe dispozitiv.
+
+Jurnal: 3.11.2026 — AG-90, direcția mutată pe suită completă; identitate Agent
+AI, acces Godot complet și control Ziva în surse, Blender urmează să fie
+integrat direct în APK. Termux rămâne neatins până la finalul migrării.
+
+## AG-91 — Blender bundled, backend app-native și probă offline — 3.11.2026
+
+**Cerință.** Blender CLI trebuie să fie în APK, să ruleze prin runtime-ul
+aplicației, să fie controlabil de Agent AI prin harness-ul nativ și să nu
+depindă de Termux sau de o descărcare ulterioară. La final, Termux se curăță
+numai după ce funcțiile echivalente sunt verificate.
+
+**Implementat în surse.**
+
+- `blender` 4.3.2+dfsg-2 și dependențele Debian sunt în repository-ul offline
+  semnat în APK. Am adăugat explicit `python3-numpy`, `python3-requests` și
+  `python3-pil`; fără numpy, exportul GLTF eșua deși randarea funcționa.
+- `AILinuxRuntimeFiles.blenderStatus()` probează binarul real, iar
+  `blenderRun()` execută un script din proiect cu
+  `--background --factory-startup --disable-autoexec`, `/workspace` montat,
+  `GODOT_AI_OUTPUT_DIR`, `GODOT_AI_INPUTS`, `TMPDIR=/tmp` și directoare Blender
+  izolate în `/tmp`.
+- Căile scriptului, `.blend`, intrărilor și ieșirilor sunt relative, validate
+  și canonicalizate în proiect. Rezultatul include exit code, output, căile
+  fișierelor noi/modificate și starea backend-ului.
+- `AILinuxRuntime` are acțiunile `blender_status` și `blender_run`;
+  `LinuxRuntime` expune `blender_status`, `blender`, `install_blender`;
+  `Integrations` expune `blender_status`, `blender_prepare`, `blender_run`.
+- Panoul Integrări afișează un card Blender bundled cu **Pregătește din APK**
+  și **Verifică Blender**. Nu mai afișează Blender ca utilitar de descărcat în
+  Runtime Linux. Promptul Agent AI și SYSTEM.md descriu backend-ul bundled.
+- `PATH`-ul PRoot include acum `/usr/sbin` și `/sbin`; fără ele, `dpkg` nu putea
+  găsi `ldconfig`/`start-stop-daemon`. Am adăugat și oferta de surse GPL pentru
+  Blender în assets și în documentație.
+
+**Pachet offline măsurat.** Buildul standard selectează **377 pachete**.
+`debian-offline.zip` are **291.488.170 bytes**, SHA-256
+`6d3cbf835dfbab58e6a9f1b9add122995a473d9346fec8cfdaea96c4da1598ce`. Instalarea
+adaugă aproximativ **800 MB**; sunt necesari cel puțin 2,5 GB liberi.
+
+**Probă locală reală.**
+
+- repository-ul a fost montat ca sursă APT `file:` și instalat în Debian ARM64
+  prin PRoot, cu `--no-install-recommends`; apt a raportat `Need to get 0 B`,
+  deci fără rețea;
+- `blender --background --factory-startup --version` → `Blender 4.3.2`;
+- randare **Cycles CPU**, 8 samples, PNG RGBA 64×64 valid;
+- export `probe.glb` (1.972 bytes, magic `glTF`) și `probe.blend` (441.664
+  bytes);
+- import real în Godot 4.7.2 ARM64 headless:
+  `GODOT_GLB_IMPORT_OK meshes=1`;
+- avertismentul Draco este cunoscut; GLB-ul de probă este necomprimat.
+
+**Teste statice și editor.**
+
+- Godot real: **1.040 assertions, 0 failures**; noul test verifică definițiile
+  bundled `blender_status`/`blender_prepare` înainte de instalare și
+  `blender_run` numai după readiness;
+- Python: **52 teste** în `modules/ai_assistant/tests`, inclusiv testele
+  Blender bundled și Termux legacy; **12 teste** pentru runtime-ul încorporat;
+- `gdparse` și `git diff --check` au trecut.
+
+**CI și APK — 3.11.2026.**
+
+- standard: [run 41712166637](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41712166637),
+  toate joburile `runtime`, `native-editor` și `android` au trecut;
+- Ziva: [run 41712168318](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41712168318),
+  `android` și `native-editor` au trecut; primul `runtime` a picat după 966 de
+  verificări într-un segfault Godot la randarea `phone_landscape`, iar jobul
+  `runtime` reluat a trecut;
+- standard: **441.882.872 bytes**, SHA-256
+  `f0de6f42dd965ddf6a6b8187692548fb6c9876a7116fc84ad4b7546b7fb308ef`,
+  certificat `652ed3795ecefdc1e7303d68a1fbebba6b9034847334c62a6d795f40fa842a28`;
+- Ziva: **747.086.184 bytes**, SHA-256
+  `1d72a814745c0811f39cafedeb94834418ed8f309adba68f6cb17f70510ea36d`,
+  certificat `243bcb2368fd4f17cd64259b5cca4a651da4adf42732c093f4d9721956e772b3`;
+- ambele APK-uri au trecut `apksigner` v2, au package ID-urile așteptate și
+  conțin `BLENDER_SOURCE_OFFER.txt`, `blender 4.3.2+dfsg-2`, `python3-numpy`,
+  repository-ul offline și hash-urile declarațate; standard are 377 pachete
+  Debian, Ziva 387;
+- instalatoarele din **Download** au fost înlocuite atomic la
+  **3.11.2026, 22:21 CET**. Vechile fișiere sunt păstrate în
+  `~/godot-ai-artifacts/ag91-previous-download/`, nu în Download.
+
+**Neefectuat.** Instalarea pe telefon și controlul live prin Agent AI/Pi,
+randarea Eevee/GPU, testarea AAA și curățarea Termux. `adb devices` nu are niciun
+dispozitiv conectat. Certificatele APK-urilor noi sunt chei debug efemere,
+diferite de aplicația deja instalată; actualizarea in-place cere keystore-ul
+persistent sau dezinstalare. Nu am dezinstalat nimic. Termux rămâne neatins.
+
+## AG-92 — utilitare pregătite exclusiv din APK — 4.11.2026
+
+**Diagnostic pe dispozitiv.** Endpointul ADB `10.146.52.179:42707` a răspuns
+(`NX729J-UN`, Android 15, arm64). Este instalată distribuția Ziva
+`com.jdscript.godotai.ziva.debug`, actualizată la 10:10. Assetul Debian din
+runtime are hash-ul `3106ed065b52ceba1f2aeba06827ef610f2d3eb6f3b13c9535e2ef0b6d8fc1cd`,
+identic cu APK-ul AG-91. Starea runtime-ului confirmă `Blender 4.3.2`,
+`python: true`, iar binarul are 79.271.136 bytes.
+
+**Cauza logurilor de rețea.** Joburile `4629f936…`, `9019258e…` și
+`5f54238e…` au fost `tool_install`, nu actualizarea pachetelor. Înainte ca
+`AIPackageManager` să instaleze setul offline, codul vechi pentru butoanele
+Node/Git/ripgrep rula `preparePackageNetwork` și `runtime.installTool`, care
+foloseau `deb.debian.org`. Astfel au intrat Node.js 20.19.2, Git și ripgrep
+prin rețea. După instalarea Agent AI, markerul Debian și Blender au fost
+instalate corect din APK. Blender nu a fost descărcat prin aceste joburi.
+
+**Corectat în surse.**
+
+- `AILinuxRuntime` nu mai are `preparePackageNetwork`, `installTool` sau
+  `TOOL_PACKAGES`; `linux_install_tool` a fost eliminat din catalogul agentului
+  și din interfață. Integrări afișează numai starea, fără butoane de descărcare.
+- `prepare` instalează automat, într-un singur job serial, repository-ul Debian
+  offline (inclusiv Blender), apoi Node.js/Pi din APK. Ziva nu pornește cât timp
+  jobul Linux este activ.
+- Instalarea Ziva folosește același set Debian deja pregătit, sare peste Pi dacă
+  este instalat și extrage addon-ul/runtime-ul Ziva plus Godot din APK.
+- `ziva_check_updates` și `ziva_update` nu mai accesează GitHub. Verificarea este
+  locală, iar butonul reinstalează exclusiv pachetele din APK.
+- `PATH`-ul PRoot pune acum primul
+  `/root/.local/node_modules/node/bin`; `node --version` și `npm --version` din
+  același PRoot au dat `v22.19.0` și `10.9.3`.
+- `linux_execute` folosește `/bin/sh -c`, nu `-lc`, ca să nu reseteze PATH-ul
+  controlat al runtime-ului.
+- Proba Node folosește calea absolută a runtime-ului bundled, nu `/usr/bin/node`.
+- Cache-ul Debian temporar și arhivele apt sunt șterse după instalarea reușită;
+  o reparare le extrage din nou din APK.
+- `AIMemoryGuard` refuză operațiile grele când Android raportează memorie
+  insuficientă: 512 MB pentru pachete/Blender/Agent AI și 768 MB pentru Ziva.
+  Joburile Linux rămân seriale, iar Agent AI/Ziva așteaptă terminarea pregătirii.
+
+**Probă reală pe telefon.** Prin PRoot-ul APK-ului instalat:
+
+- `Blender 4.3.2` a randat Cycles CPU 8 samples, PNG RGBA 64×64;
+- a exportat `probe.glb` (1.9 KB), `probe.blend` (431 KB) și `probe.json`;
+- Godot 4.7.2 Linux ARM64 din APK a importat GLB-ul:
+  `GODOT_GLB_IMPORT_OK meshes=1`;
+- imaginea randată a fost extrasă și inspectată vizual; cubul este prezent.
+
+**Teste sursă.** Testele Blender bundled au trecut; suita Godot a rămas la
+**1.040 assertions, 0 failures**, iar testele Python la **53/53**. Corecția
+necesită un APK nou; utilizatorul a cerut oprirea compilării până la stabilirea
+cerințelor. Nu s-a pornit un build nou după această cerere și nu s-a înlocuit
+Download. Cheia de semnare stabilă a fost configurată ca secret GitHub, dar
+instalarea peste aplicația actuală cere o singură dezinstalare.
+
+**Compilare și livrare — 4.11.2026.** Ambele variante au fost compilate din
+`fdf1bb16208da64ed1d52cf3dc3ebd6e4abc8fa5`; toate joburile `runtime`,
+`native-editor` și `android` au încheiat cu succes:
+
+- standard: [workflow
+  `41813810922`](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41813810922),
+  artifact SHA-256 `4bc1ea352ddaee3eed01584164f666c9aa8e1da001521f2a55f8f6540d0e7463`;
+- Ziva: [workflow
+  `41813860548`](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41813860548),
+  artifact SHA-256 `782d08e6c7894514e754225319646e08a540a4648770e1f619d8e24cc4504238`.
+
+Arhivele au trecut `unzip -t`, iar APK-urile extrase au fost verificate prin
+hash-ul intern și cu `apksigner`. Ambele poartă certificatul persistent
+`318daaf4b944551dacf302090011e8e9eb1d1bff2aacb4df0c7dc7f6f7cd91d5` și
+pachetele `com.jdscript.godotai.debug`, respectiv
+`com.jdscript.godotai.ziva.debug`.
+
+- `Godot-AI-Android-arm64-debug.apk`: **441.884.608 bytes**, SHA-256
+  `a624a2b14cbd7a3dccd65f656b08cfe6b36d2e9a9b06aefa5ddcbb78a66816e0`;
+- `Godot-AI-Ziva-arm64-debug.apk`: **747.085.508 bytes**, SHA-256
+  `bb5136bcbde2e433890ecfcf426a3956acc273362351a060c5c26401186d30eb`.
+
+Download conține acum exact o pereche, înlocuită atomic la 12:04 CET, cu
+checksum-uri alăturate; perechea AG-91 a fost arhivată în
+`~/godot-ai-artifacts/ag92b-previous-download/`. APK-ul standard include
+`debian-offline.zip` (377 pachete, inclusiv Blender 4.3.2, python3-numpy și
+ripgrep), Node.js 22.19.0, `pi-coding-agent-1.5.0.tgz` și oferta de sursă GPL
+Blender; varianta Ziva adaugă runtime-ul și addon-ul Ziva.
+
+**Limitare de instalare.** Semnătura aplicației Ziva deja instalate este
+diferită de certificatul persistent. Prima instalare AG-92 peste ea cere
+dezinstalare (cu pierderea datelor aplicației) sau o migrare semnată; nu am
+dezinstalat și nu am instalat nimic. Dispozitivul ADB nu a răspuns la ultima
+verificare (`10.146.52.179:42707`, connection refused), deci proba pe telefon
+rămâne de făcut după reconectare.
+
+## AG-89 — pachete runtime incluse în APK și actualizare offline — 3.11.2026
+
+**Cerință.** Mediul minim să fie pregătit în APK, să nu mai fie descărcat la
+fiecare instalare, iar Setări să aibă jos secțiunea **Actualizare pachete**, cu
+consolă, buton de actualizare, anulare și copiere a rezultatului. Sunt vizate
+Linux/Debian, Node.js, utilitarele Debian, harness-ul Pi și, separat, runtime-ul
+Ziva plus Godot.
+
+**Implementat în surse.**
+
+- `tools/embedded-runtime/packages.py` descarcă numai la build, verifică SHA-256
+  și împachetează în APK Node.js 22.19.0, Pi 1.5.0 și un repository apt plat cu
+  dependențele Debian arm64. `standard` include mediul comun; `ziva-preview`
+  include suplimentar addon-ul, runtime-ul CEF, `zivacode`, Godot 4.7.2 Linux
+  ARM64 și bibliotecile GUI.
+- `packages.json` fixează URL-urile, dimensiunile și hash-urile. Rezolvarea
+  Debian pornește de la statusul exact al rootfs-ului și păstrează `Multi-Arch`,
+  astfel încât apt poate instala offline inclusiv `perl:any`.
+- `AIPackageManager` copiază numai active verificate pe hash, extrage Node/Pi
+  prin tar, instalează repository-ul apt local și refuză pachetele lipsă. Nu
+  există `AIDownload`, `npm install` sau sursă de rețea în fluxul Ziva/Pi.
+- Pi folosește direct `node_modules` din arhiva APK. Ziva folosește arhivele
+  oficiale deja fixate, iar dependențele sunt verificate cu `ldd` după instalarea
+  offline. Punțile rămân în Kotlin; uneltele și sesiunea Pi nu sunt rescrise.
+- Setări → **Actualizare pachete** este ultimul tab. Are consolă `CodeEdit`
+  mărginită, actualizare, anulare și **Copiază rezultatul**. Jobul rulează în
+  serviciul foreground existent, raportează output-ul și reia afișarea ultimului
+  rezultat după redeschidere.
+- Baza Debian este reconstruită atomic numai când hash-ul din APK se schimbă
+  sau verificarea eșuează; `/root/.pi` este păstrat. Pi și Ziva trebuie oprite
+  înainte de actualizare, iar auto-pornirea Ziva este suspendată în timpul ei.
+- CI verifică manifestul, fiecare dimensiune/hash, prezența pachetelor Ziva
+  exclusiv în distribuția Ziva și clasa `AIPackageManager` în DEX.
+
+**Verificat local.** `gdparse` a trecut pe `panel.gd` și fixture-ul de test;
+toate testele Python relevante au trecut, inclusiv noile cazuri pentru versiuni
+Debian, alternative, dependențe tranzitive, `Multi-Arch` și sumele din
+repository. Ambele seturi au fost generate local: `debian-offline.zip` are
+35.417.215 bytes pentru `standard` și 87.882.286 bytes pentru `ziva-preview`.
+
+- Am extras rootfs-ul Debian oficial într-un director de test și am rulat apt
+  prin PRoot: cele 53 de pachete comune s-au instalat offline din `file:`;
+  `git`, `xz`, Python și ripgrep au răspuns cu versiunile așteptate.
+- Am instalat offline pachetele Ziva, am extras arhivele oficiale și am rulat
+  `zivacode --version` = `v3.3.3`, `godot --version` =
+  `4.7.2.stable.official.ed1daf0bf`; `ldd` nu a raportat biblioteci lipsă.
+- Node din arhiva APK a răspuns `v22.19.0`; Pi a răspuns `1.5.0`, iar RPC-ul
+  `get_state` a returnat `success:true` prin PRoot.
+
+**Verificat în CI și în APK.** Ambele workflow-uri au trecut integral
+(`runtime`, `android`, `native-editor`):
+
+- standard: [41690102002](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41690102002),
+  artefact `13257208495`; APK **185.795.978 bytes**, SHA-256
+  `068b505a79267fd45b32d75ce98c037c5060c285c4fc6340df65f99eab11e17b`,
+  certificat `53c1cd8cf3376c37ca784fb4e1501847430c56f87f9016ad8ab30766e51440a0`;
+- Ziva: [41690107847](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41690107847),
+  artefact `13256994323`; APK **542.629.218 bytes**, SHA-256
+  `31c3f3404b663de9a6a22bc6375186d7c0e0d8dd2d8199041e802a9a534d8c64`,
+  certificat `591551d8b0ac247592f19c99b5ea27bc2dd738dbb128cdda269e2d580229628c`.
+- Randare: **966 verificări × 5 configurări** upstream și **997 × 5** în editorul
+  nativ, fără eșecuri. Scenariul nou `packages` are **59/0**, iar ecranul Start
+  cu noul tab are **70/0**.
+- Ambele APK-uri au trecut `apksigner` v2 și `unzip -t`; toate hash-urile din
+  manifestul de pachete corespund. `standard` nu conține niciun asset Ziva.
+- `/storage/emulated/0/Download` a fost înlocuit atomic la **3.11.2026,
+  19:50:32 CET**. Rămân numai cele două instalatoare curente și checksum-urile;
+  versiunile anterioare sunt în `godot-ai-artifacts/55eec40c4c/previous/`.
+- Dovezi: `godot-ai-artifacts/55eec40c4c/`, inclusiv `delivery.json` și logurile
+  CI standard/Ziva.
+
+**Limite rămase.** Dispozitivul ADB `10.146.52.179:38329` a refuzat conexiunea
+în timpul verificării finale (`connection refused`/`offline`). APK-urile nu au
+fost instalate sau rulate pe telefon și nu există încă o probă de actualizare
+cu rețeaua oprită pe dispozitiv. Probele locale PRoot acoperă instalarea
+offline, dar nu înlocuiesc serviciile Android/Binder.
+
+Secretul de semnare persistent nu este disponibil în noul repository, deci
+fiecare rulare CI a folosit o cheie debug aleatoare; standard și Ziva au
+certificate diferite, iar actualizarea peste aplicațiile deja instalate poate
+fi refuzată până la dezinstalare sau configurarea unei chei stabile. Nu am
+dezinstalat aplicația Ziva, deoarece datele ei private pot fi pierdute.
+
+Licența Ziva este proprietară; arhivele sunt doar în build-ul personal,
+necomercial, fără a pretinde drept de redistribuire. Blender rămâne opțional și
+nu face parte din setul minim.
+
+Jurnal: 3.11.2026 — AG-89, ambele APK-uri au fost compilate și verificate,
+pachetele offline sunt în instalatoare, iar Download conține doar versiunile
+curente. Proba pe telefon și cheia de semnare stabilă rămân deschise.
+
+## AG-87 — Pi deține uneltele, sesiunea și contextul — 3.11.2026
+
+**Cerință.** Harness-ul Pi trebuie folosit nativ pentru unelte, context, memorie
+și compactare; aplicația noastră trebuie să rămână puntea către Godot și UI-ul,
+nu să reimplementeze bucla agentului.
+
+**Implementat în surse.** Catalogul Godot este expus integral ca unelte MCP
+native, cu `"exposure": "deferred"`. Pi pornește cu `tool_search` activ și
+descoperă singur schema relevantă; wrapper-ul propriu `search`/`describe`/`call`
+nu mai este expus. În Plan/Ask, serverul publică numai unelte read-only.
+
+- Procesul Pi este păstrat viu între tururi pentru aceeași conversație,
+  provider, model, mod și configurație de chei. `pi_status` expune ruta activă,
+  iar schimbarea oricărui element oprește și repornește sesiunea cu
+  `--session-id`.
+- Promptul per tur a fost redus la modul de lucru, modelul selectat, maparea
+  `/workspace`, fișierele/referințele active, imagini și cererea utilizatorului.
+  Rezumatul de compactare al aplicației, planul intern și `AGENT.md` nu mai sunt
+  injectate în fiecare tur.
+- Instrucțiunile stabile sunt scrise în
+  `/root/.pi/agent/APPEND_SYSTEM.md`; compactarea automată este configurată în
+  `settings.json` și aparține Pi. Aplicația nu mai pornește compactarea proprie
+  în tururile gestionate de Pi.
+- Comanda manuală `/compact` trimite `{"type":"compact"}` la procesul Pi atunci
+  când ruta curentă este aceeași; altfel rămâne fallback-ul nativ.
+- Numele reale ale uneltelor MCP sunt normalizate în istoric și jurnal, iar
+  rezultatele și imaginile păstrează fluxul existent de aprobare și audit.
+
+**Verificat local.** `gdparse` pe scripturile runtime și testul Godot;
+`test_pi_runtime.py` 7/7; `py_compile`; `git diff --check`.
+
+**Verificat în CI și în APK.** Ambele workflow-uri au trecut integral, inclusiv
+`runtime`, `native-editor` și `android`:
+[41655561284](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41655561284)
+pentru standard și
+[41655567953](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41655567953)
+pentru Ziva. Artefactele sunt `13239693064` și `13240387857`.
+
+- APK standard: 112.626.618 bytes, SHA-256
+  `716620d34b90b468aeba18a1ddf3a7db5f120405a81cffe009184c9f153e1c91`,
+  certificat debug `c2bcbb05cdaaedb1f78f69b02d779a6c34edae5763c931caab8fe05cb56846c2`.
+- APK Ziva: 112.629.250 bytes, SHA-256
+  `bbbb66bdbc1da7d7a5ba65d1b8502761176644084ca2b0bb63f8d346f5146573`,
+  certificat debug `188a549174b80a2fc9a07f529605483e8e5678cf4e47a1309176d1cec6ea5d1e`.
+- Ambele păstrează numai ABI `arm64-v8a`, manifestul runtime-ului, cele 46 de
+  scripturi byte cu byte, `AIPiRuntime`, `APPEND_SYSTEM.md`, `tool_search`,
+  `deferred`, `compact` și textele Meta; nu conțin OpenCode/PTY.
+- Download a fost înlocuit atomic la **3.11.2026, 16:19:16 CET**. Instalatoarele
+  anterioare din `1c81ec4038` sunt în
+  `~/godot-ai-artifacts/pi-native-9fb15f9f16/previous/`; în Download au rămas
+  numai cele două instalatoare curente și checksum-urile.
+
+**Neefectuat încă.** Proba live cu un furnizor real, instalarea pe dispozitiv și
+validarea vizuală Android. Conversațiile bifurcate/importate pornesc o sesiune
+Pi nouă; istoricul aplicației rămâne în UI, dar nu este migrat automat în
+sesiunea Pi. Fișierele `AGENTS.md`/`CLAUDE.md` sunt descoperite nativ, iar
+`AGENT.md` este citit de Pi prin instrucțiunile de proiect.
+
+## AG-86 — Meta Model API și Muse Spark ca furnizor de coding — 3.11.2026
+
+**Cerință.** Aplicația trebuie să ofere Meta ca furnizor AI separat, cu cheie API,
+astfel încât modelele Muse Spark pentru coding să poată rula prin același harness
+Pi ca ceilalți furnizori.
+
+**Implementat în surse.** Catalogul are acum **Meta Model API**, cloud, cu
+endpointul oficial `https://api.meta.ai/v1`, protocol Responses și prefix de
+cheie `LLM_`. Sunt acceptate atât cheia brută `LLM_…`, cât și etichetele
+`MODEL_API_KEY=…` și `META_API_KEY=…`.
+
+- Catalogul live `GET /v1/models` este filtrat la modelele text/agentice
+  `muse-spark-*` și `muse-wonder-*`; modelele Muse Image, Voice Transcribe și SAM
+  sunt excluse.
+- Metadatele publice sunt completate pentru contextul de 1.048.576 tokeni,
+  limita de 131.072 tokeni, input text/imagine, tool calling și reasoning.
+  `muse-spark-1.3-contributor` nu primește nivelul `max`; varianta Standard 1.3
+  îl primește.
+- Tarifele oficiale per 1M tokeni sunt păstrate în catalog: Muse Spark Standard
+  $1,25 intrare / $4,25 ieșire / $0,15 cache, Contributor $0,10 / $0,20 /
+  $0,002, iar Muse Wonder $4 / $20 / $0,20.
+- A fost adăugată pictograma Meta din setul Lobe, cu URL și SHA-256 fixate.
+- Profilul folosește Responses API, deci Pi îl mapează la `openai-responses`, iar
+  harness-ul nativ păstrează replay-ul reasoning-ului criptat.
+
+**Verificat local.** `gdparse` a trecut pe `providers.gd`, `icons.gd`,
+`chat_view.gd` și `test_runtime.gd`; `py_compile` a trecut pe fixture-ul HTTP.
+`test_pi_runtime.py` a trecut 5/5; `clang-format --dry-run --Werror`,
+`file_format`, `copyright_headers` și `validate_includes` au trecut pe cele două
+fișiere C++ modificate pentru eliminarea avertismentelor de umbrire.
+Testele adaugă detecția cheii, URL-ul oficial, filtrarea catalogului, limitele,
+capabilitățile, nivelurile de reasoning, tarifele și pictograma.
+
+**Verificat în CI și în APK.** Ambele workflow-uri au trecut integral:
+[41635722042](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41635722042)
+pentru instalatorul standard și
+[41635723455](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41635723455)
+pentru Ziva. Joburile `runtime`, `native-editor` și `android` au încheiat cu
+succes. Artefactele sunt `13231385322` și `13231610038`, ambele din sursa
+`1c81ec403819dd8c29be40d09c8267559fb964a5`. Commitul următor,
+`0f9555e01cda40b8f9adffdfd3ae8087f2d76f2d`, adaugă numai header-ul de licență
+cerut de verificarea statică pentru `ai_runtime_bridge.cpp`.
+
+- APK standard: 112.628.770 bytes, SHA-256
+  `02a7abc8794e2090cc6be2e7766d00d651d30a617ebe4e7e13507d3ad97a3fa8`,
+  certificat debug `1051df4bf0927dc452adb432bf2ca2aa0ad423d33058040d04fd93cb585fc64f`.
+- APK Ziva: 112.629.610 bytes, SHA-256
+  `953b5c24dbd6c3340d2748b772049fa161f839868065b99b13bcb6260e3b1d96`,
+  certificat debug `0020f6fc120f27b16b71219a3780d9991f6d781e3f2bdb8b050cdd41cadc5efa`.
+- Ambele pachete au trecut verificarea ZIP, au numai ABI `arm64-v8a`, conțin
+  manifestul runtime-ului încorporat și cele 46 de scripturi identice byte cu
+  byte. Sunt prezente `AIPiRuntime`, textele `Meta Model API` și
+  `muse-spark-1.3-contributor`; nu există `AIOpenCodeRuntime`, `libai_pty.so` sau
+  active OpenCode.
+- Instalatoarele din `/storage/emulated/0/Download` au fost înlocuite atomic la
+  **3.11.2026, 13:48:27 CET**. Copiile vechi din `a7fb12d30d` sunt păstrate în
+  `~/godot-ai-artifacts/pi-meta-1c81ec4038/previous/`; în Download rămân numai
+  cele două instalatoare curente și checksum-urile lor.
+- `https://api.meta.ai/v1/status` a răspuns operațional, iar `GET /v1/models`
+  fără cheie a răspuns HTTP 401, conform așteptărilor. Nu s-a făcut o cerere
+  autentificată.
+
+**Neefectuat încă.** Nu s-a testat o cheie Meta reală, un tur de coding live și
+instalarea pe dispozitiv; `adb devices` nu a găsit niciun dispozitiv conectat.
+Contributor mode implică folosirea conținutului pentru antrenarea modelelor Meta;
+utilizatorul trebuie să aleagă explicit varianta Contributor, nu este selectată
+automat de aplicație. Certificatele sunt identități debug efemere ale CI, deci
+actualizarea peste o instalare semnată cu altă cheie cere dezinstalare sau aceeași
+cheie de semnare.
+
+Jurnal: 3.11.2026 — AG-86, Meta Model API adăugat cu Muse Spark Standard și
+Contributor, catalog Responses, tarife oficiale și pictogramă. CI runtime,
+native-editor și Android trecut pentru ambele distribuții; APK-urile au fost
+verificate și livrate în Download. Verificarea autentificată și cea pe dispozitiv
+rămân de făcut.
+
+## AG-85 — Agent AI pe Pi RPC, fără OpenCode TUI — 3.11.2026
+
+**Cerință.** Agentul propriu trebuie să folosească runtime-ul și harness-ul Pi,
+cu uneltele native Pi cablate la toate capabilitățile aplicației. OpenCode TUI
+se scoate din distribuția curentă; Ziva și proiectul vechi rămân neatinse.
+
+**Implementat în surse.** Branch-ul `feat/pi-rpc` pornește de la arhiva
+`archive/opencode-tui-20261102` (`b409c622f1`). Au fost eliminate tabul și
+pluginul OpenCode, runtime-ul Kotlin, fereastra WebView, PTY-ul nativ și activele
+xterm. `main` nu a fost modificat.
+
+- `AIPiRuntime.kt` instalează Node.js `22.19.0` și
+  `@earendil-works/pi-coding-agent@1.5.0` în PRoot, fixează versiunile, scrie
+  `models.json`, `mcp.json` și `settings.json` în directorul privat
+  `/root/.pi/agent`, pornește `--mode rpc --no-approve` și expune acțiunile
+  `pi_status`, `pi_install`, `pi_cancel`, `pi_start`, `pi_send`, `pi_poll`,
+  `pi_abort`, `pi_stop`.
+- `pi_session.gd` transformă profilurile API și locale în furnizori Pi și
+  grupează modelele după `openai-completions`, `openai-responses`,
+  `anthropic-messages` și `google-generative-ai`. Profilurile sunt reconstruite
+  la fiecare tură; o cheie sau un model schimbat nu reutilizează configurația
+  veche. SIWC și companion rămân pe harness-ul nativ.
+- `godot_mcp.gd` expune catalogul aplicației prin meta-uneltele `search`,
+  `describe` și `call`, cu Bearer token, loopback, corpuri chunked și imagini
+  MCP. Configurația Pi folosește `"exposure": "direct"` și un timeout de o oră
+  pentru aprobări.
+- `panel.gd` păstrează conversația și cardurile aplicației, trimite contextul de
+  proiect, fișiere, referințe și imagini, mapează evenimentele RPC, salvează
+  rezultatele reale ale uneltelor în istoric și detectează schimbările făcute de
+  `bash`, `edit` și `write` prin snapshot-uri mărginite.
+- Plan și Ask sunt read-only pentru Pi. Auto și Default primesc uneltele native
+  complete. Operațiile MCP ale aplicației păstrează planul Auto și dialogul de
+  aprobare; uneltele native Pi rulează direct în PRoot, fără acel dialog, cum a
+  fost cerut.
+
+**Verificat local.** `gdparse` a trecut pe toate scripturile
+`modules/ai_assistant/runtime/*.gd` și pe `test_runtime.gd`. `py_compile` a
+trecut pe generatorul de runtime și runner-ele Python, iar `git diff --check`
+este curat. Configurația `models.json` produsă de aplicație a fost acceptată de
+Pi 1.5.0 prin `--list-models`, inclusiv un model fără câmp `cost`. Pachetul
+`node-linux-arm64@22.19.0` a fost inspectat: binarul este ELF 64-bit AArch64 cu
+interpretor glibc, potrivit pentru Debianul din PRoot. O probă
+end-to-end locală cu un furnizor OpenAI-compatible simulat și un server MCP
+simulat a confirmat că Pi primește cele șapte unelte native plus
+`mcp__godot__search`, `mcp__godot__describe` și `mcp__godot__call`, iar un apel
+`search` trece prin MCP și rezultatul intră în turul următor. Proba nu folosește
+un cont sau furnizor real. Escaparea `$`/`!` din cheile API a fost verificată cu
+resolverul Pi, astfel încât o cheie literală să nu poată rula comenzi prin
+sintaxa `!command` a configurației.
+
+**Verificat în CI și în APK.** Rulările
+[41606629516](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41606629516)
+(standard) și
+[41606640713](https://github.com/JDscript1/codot-ai-opencode/actions/runs/41606640713)
+(Ziva) au trecut toate cele trei joburi pe sursa `92b98d3819`. Runtime-ul a
+raportat **1015 aserțiuni, 0 eșecuri** în fiecare rulare. Editorul nativ a trecut
+**991 de verificări, 0 eșecuri** în fiecare dintre cele cinci configurații, plus
+suitele focalizate 134/75/76/71/76/90. Jobul Android a verificat semnătura v2,
+package-urile `com.jdscript.godotai.debug` și `com.jdscript.godotai.ziva.debug`,
+ABI ARM64, clasa `AIPiRuntime`, absența OpenCode/PTY și cele **46 de scripturi**
+încorporate byte cu byte.
+
+APK standard: **112.627.098 bytes**, SHA-256
+`599b0f0d2af894e874236cdb42375f46a244628a4077ba0dc1bc526c9bea0a35`.
+APK Ziva: **112.628.630 bytes**, SHA-256
+`a78670f5315d9c8ab57eb99f571d81b83721f1976baf1735452d9c7cb54a547a`.
+Ambele artefacte au fost descărcate, li s-au verificat SHA-256, ZIP-ul, package-ul,
+ABI-ul, clasele și scripturile; semnătura APK v2 fusese verificată de CI.
+Artefactele sunt în `~/godot-ai-artifacts/pi-rpc-92b98d3819/`. La
+**3.11.2026, 10:55 CET** au fost înlocuite atomic cele două installere cu nume
+stabil din Download, cu checksum alăturat; copiile vechi au fost păstrate numai
+în subdirectorul `previous/` al artefactelor. În Download nu au rămas alte
+installere ale fork-ului.
+
+**Neefectuat încă.** Instalarea Node.js ARM64 din APK, pornirea Pi în PRoot,
+afișarea UI pe dispozitiv și un test live cu furnizor real. `adb devices` nu avea
+niciun dispozitiv conectat în această rundă.
+
+**Limite.** Uneltele native Pi nu pot fi interceptate de planul Auto sau de
+aprobările aplicației; schimbările lor sunt observate mărginit, fără rollback
+exact. `plan_ask` din Pi creează un card detașat de apelul MCP. O singură sesiune
+rulează pe un proiect, iar versiunile Pi/Node trebuie reverificate la actualizări.
+Repository-ul nou nu are `GODOT_AI_DEBUG_KEYSTORE`: APK-urile au chei debug
+efemerale (`891fadfa…` standard, `e12cc960…` Ziva), diferite de certificatul
+persistent `2e0a8096…` al aplicației existente. Instalarea peste versiunea veche
+cere aceeași cheie de semnare sau dezinstalare. Detalii: `docs/PI_RPC.md`.
+
+Jurnal: 3.11.2026 — AG-85, Agent AI mutat pe Pi RPC, OpenCode TUI scos din surse,
+profiluri API/locale și unelte Godot prin MCP direct. Verificările statice, probele
+Pi simulate, ambele build-uri Android și verificările editorului nativ au trecut;
+APK-urile au fost livrate în Download, iar instalarea pe dispozitiv și furnizorul
+live rămân de probat. Semnătura APK este încă efemeră în repository-ul nou.
+
+## AG-84 — OpenCode TUI ca runtime de agent, cu unelte Godot prin MCP — 2.11.2026
+
+**Cerință.** Asistentul propriu trebuie păstrat ca fallback, dar aplicația are
+nevoie de un runtime de agent separat, OpenCode, afișat direct în editor:
+interfața terminal OpenCode într-un tab principal, capabilitățile native Godot
+expuse prin MCP și instalarea CLI-ului prin npm în runtime-ul Debian existent,
+fără Termux sau un runtime suplimentar pe dispozitiv.
+
+**Implementat în surse.**
+
+- Tab principal **OpenCode**, plugin de editor separat, cu bară de stare,
+  instalare anulabilă, pornire/oprire/repornire, placeholder cu erori și
+  încadrare nativă a terminalului peste suprafața Godot.
+- `AIOpenCodeRuntime.kt`: instalare `nodejs`, `npm`, `git` și `ripgrep` prin
+  `apt-get` când lipsesc, apoi `npm install --prefix /root/.local --omit=optional
+  @opencode/cli@2.2.5 @opencode/cli-linux-arm64@2.2.5`, cu retry după cache
+  npm corupt; verificare binar și `--version`; stare, progres, anulare, spațiu
+  liber minim 900 MB; ecranul rămâne aprins în timpul descărcării; proiectul
+  este montat de PRoot la `/workspace`; configurarea OpenCode este actualizată
+  fără a suprascrie cheile utilizatorului.
+- Configurare OpenCode V2: `mcp.servers.godot` de tip `remote`, fără OAuth,
+  fără codemode, cu token bearer; permisiuni ordonate: `read`,
+  `godot_search` și `godot_describe` permise, `edit`, `shell` și `godot_call`
+  cer aprobare. Sunt acceptate `opencode.json` și `opencode.jsonc`, inclusiv
+  comentarii și virgule finale; un fișier ilegibil oprește pornirea în loc să
+  fie înlocuit.
+- `libai_pty.so` (`ai_pty.c`): PTY nativ pentru Android, copiere
+  stdin/stdout, redimensionare prin FIFO (`R cols rows`), terminare
+  grațioasă (`Q`), propagarea semnalelor și cod de ieșire. Este compilat PIE
+  ARM64 cu aliniere pe pagini de 16 KB și împachetat în `nativeLibraryDir`.
+- `AIOpenCodeWindow.kt` și activele xterm.js 6.0.0 / `@xterm/addon-fit`
+  0.11.0: WebView local, punte JS restrânsă pentru intrare, paste,
+  redimensionare și tastatură; ieșire base64 în loturi, limită de 2 MB în
+  coadă și resincronizare din scrollback-ul de 512 KB al runtime-ului.
+- `opencode_mcp.gd`: server MCP loopback cu token bearer, JSON-RPC
+  `initialize`/`ping`/`tools/list`/`tools/call`, negociere până la
+  `2025-11-25`, corpuri chunked, limite de antet/corp/conexiuni și expunerea
+  a doar trei meta-unelte: `search`, `describe`, `call`.
+- `panel.gd`: catalogul OpenCode pornește de la toate definițiile editorului,
+  dar elimină harness-ul, planificarea, memoria, Ziva, MCP, Linux, GitHub,
+  Blender, preview-ul, managementul de unelte și reflecția brută; rămân
+  scenele, nodurile, scripturile, playtest-ul, capturile, change sets,
+  assets, skills, store, engineering și verificarea. Execuția trece prin
+  `_execute_call(..., true)`, cu jurnal, aprobări și un singur apel concurent.
+- Legături C++ (`AIOpenCodePanel`, `AIOpenCodeEditorPlugin`, singleton-ul
+  asistentului), înregistrare în `editor_node.cpp`, ciclu de viață Android
+  (`initialize`, `release`, `pause`, `resume`) și ordinea de build a
+  scripturilor încorporate.
+- Build și CI: compilarea `ai_pty.c` în `buildAiEmbeddedRuntime`; workflow-ul
+  verifică în APK `libai_pty.so` ca ELF 64-bit PIE AArch64, cele cinci active
+  ale terminalului, clasele Kotlin în dex și pluginul nativ.
+
+**Verificat local.** `gdparse` a trecut pe `opencode_mcp.gd`, `opencode.gd`,
+`opencode_screen.gd` și `panel.gd`. `node --check` a trecut pe JavaScript-ul
+inline din `terminal.html` și pe `addon-fit.js`. `py_compile` a trecut pe
+`runtime_builder.py`; toate scripturile `runtime/*.gd` sunt incluse în build.
+Workflow-ul YAML se parsează. `ai_pty.c` compilează și se linkează cu clang
+`-O2 -Wall -Wextra -Werror`. `git diff --check` este curat. Testele Godot
+adaugă verificări pentru tokenul MCP, negocierea protocolului, cele trei
+meta-unelte, delegarea căutării/execuției, imaginile capturilor, corpurile
+chunked, corpurile incomplete și filtrarea catalogului.
+
+**Verificat în CI și în APK.** Workflow-ul
+[41449899776](https://github.com/JDscript1/godot-ai-android/actions/runs/41449899776),
+pe sursa `793a4152b3567e98506d3673dffbde13f41d542f`, a încheiat cu succes
+joburile `runtime`, `native-editor` și `android`. Runtime-ul a raportat
+**1002 aserțiuni, 0 eșecuri**, iar verificarea editorului nativ **958
+verificări, 0 eșecuri**. În APK au fost confirmate `libai_pty.so` ca ELF
+64-bit PIE AArch64, cele cinci active xterm, clasele `AIOpenCodeRuntime` și
+`AIOpenCodeWindow` în dex, `AIOpenCodeEditorPlugin` în biblioteca nativă și
+toate cele **47 de scripturi încorporate** byte cu byte. APK-ul are
+`com.jdscript.godotai.debug`, numai ARM64, **112.790.988 bytes**, SHA-256
+`78812b2dbdde1984b7779772aa61e46bfb137c20fac979830a0d643f4f7fc0fd`.
+Artefactul este păstrat în `~/godot-ai-artifacts/opencode-793a4152/` și a
+fost livrat în Download la **2.11.2026, 14:27 CET**, cu checksum alăturat.
+Sursa a fost recopiată, SHA-256-ul fișierului copiat a fost reverificat, iar
+arhiva ZIP a trecut `unzip -t`. S-au înlocuit vechile
+`Godot-AI-Android-arm64-debug.apk` (10:11) și `Godot-AI-Ziva-arm64-debug.apk`
+(10:05); în Download a rămas un singur installer al fork-ului, cu numele stabil
+`Godot-AI-Android-arm64-debug.apk`. Alte descărcări nu au fost atinse, iar
+pachetul nu a fost instalat automat. Primele două rulări au expus erori reale
+de tipare GDScript (tratate ca erori), apoi erori Kotlin Android
+(`Process.pid()` lipsește, `Os.mkfifo` nu întoarce cod, fluxul PTY nu este
+`FileOutputStream`) și o legătură lipsă în fixture-ul QA; toate au fost
+corectate înainte de rularea verde.
+
+**Corecțiile de instalare, compilate în CI.** Workflow-ul
+[41461840367](https://github.com/JDscript1/godot-ai-android/actions/runs/41461840367),
+pe sursa `47a8c87f677068b8868ea483d564498bfa2e3d92` din ramura
+`build/opencode-install-fix-20261102T152500Z`, a trecut toate joburile.
+Runtime-ul a raportat **1002 aserțiuni, 0 eșecuri**; editorul nativ **992/0**
+în fiecare dintre cele cinci configurații; randarea **961/0** în fiecare dintre
+cele cinci configurații; companionul **9/9**; jobul Android a verificat
+semnătura, package-ul, ABI ARM64, bibliotecile native și scripturile
+încorporate. APK-ul nou are `com.jdscript.godotai.debug`, numai `arm64-v8a`,
+**112.793.972 bytes**, SHA-256
+`eb066f62709fa97cd43fb43e58d6f61c7e3854c5fd1d71af95afce4887058aa1`; certificatul
+de semnare este `2e0a80969c099f7ff72bfe0c0cd33d98ebdd0e64bbf9729294df0b11665fcab5`.
+În APK au fost reconfirmate `libai_pty.so` ca ELF64 PIE AArch64, cele cinci
+active xterm, clasele `AIOpenCodeRuntime`/`AIOpenCodeWindow` și toate cele
+**47 de scripturi** byte cu byte. Artefactul este păstrat în
+`~/godot-ai-artifacts/opencode-install-fix-47a8c87f/`.
+
+**Instalat peste versiunea veche.** `adb install -r` a reușit pe NX729J-UN;
+`base.apk` instalat are exact SHA-256-ul de mai sus, iar datele aplicației au
+fost păstrate: rootfs-ul, instalarea OpenCode de **248.433.656 bytes** și
+configurația au rămas intacte. Din runtime-ul noului APK, prin PRoot,
+`opencode v2.2.5` a răspuns din nou. Instalatorul din Download a fost
+înlocuit cu numele stabil `Godot-AI-Android-arm64-debug.apk` și checksum
+alăturat; copia veche este păstrată ca dovadă în
+`~/godot-ai-artifacts/opencode-install-fix-47a8c87f/previous/`. În Download a
+rămas un singur installer al fork-ului. UI-ul nu a putut fi confirmat vizual:
+dispozitivul a rămas pe ecranul de blocare/AOD, iar deblocarea facială a
+eșuat; prin urmare pornirea tabului și TUI-ul rămân neprobate.
+
+**Diagnostic pe dispozitiv.** APK-ul `793a4152` a fost instalat pe NX729J-UN
+prin ADB (`10.146.52.179:41687`). Instalarea din UI s-a oprit la 55%; jurnalul
+npm `2026-11-02T13_38_29_352Z-debug-0.log` a arătat `ECONNABORTED`/`exit -103`,
+descărcări parțiale pentru toate platformele și un `opencode.exe` de 229 bytes,
+fără postinstall. Dispozitivul intrase în Doze (`Device idle: true`), iar
+socketurile TCP ale aplicației expirau; DNS-ul guest nu rezolva
+`registry.npmjs.org` deși Android îl rezolva la `104.16.8.34`. După trezire,
+scoaterea UID-ului din restricțiile de idle și fixarea adresei în
+`/etc/hosts`, conexiunile TCP au reușit.
+
+Reparația manuală a șters cache-ul npm corupt și a rulat `npm install
+--prefix /root/.local --omit=optional @opencode/cli@2.2.5
+@opencode/cli-linux-arm64@2.2.5`. Postinstall-ul a creat un binar ARM64 de
+**248.433.656 bytes**, iar `opencode v2.2.5` a răspuns. În surse au fost
+corectate: pinul `registry.npmjs.org` în `synchronizeHosts`, comanda npm numai
+cu pachetul ARM64, retry-ul după `_cacache` corupt, timeout-urile de fetch,
+`FLAG_KEEP_SCREEN_ON` în timpul instalării și ordinea stării `error` înaintea
+stării „neinstalat” în `opencode_screen.gd`. Testele Python ale runtime-ului
+încorporat au trecut (6/6 build, 8/8 rootfs). Corecțiile au fost apoi
+compilate în APK-ul `47a8c87f` și instalate pe dispozitiv; proba npm din UI
+rămâne nefăcută din cauza ecranului blocat.
+
+**Limite.** APK-ul corectat este instalat, dar UI-ul nu a putut fi confirmat
+vizual. Nu au fost rulate din aplicație: instalarea repetată din UI, pornirea
+PTY, redimensionarea, tastatura, scrollback-ul, aprobările TUI sau
+repornirea. Nu există probă live cu un furnizor OpenCode; `/connect` și
+`/models` rămân de validat pe un cont real.
+CLI-ul este fixat la `2.2.5`, iar o actualizare poate schimba numele
+acțiunilor sau formatul configurației V2. O singură sesiune OpenCode rulează
+odată, pe un singur proiect. Detalii istorice: branch-ul `archive/opencode-tui-20261102`.
+
+Jurnal: 2.11.2026 — AG-84, tab OpenCode, runtime npm în PRoot, PTY nativ,
+terminal xterm și server MCP cu unelte Godot. Pe NX729J-UN s-a diagnosticat
+oprirea la 55%: Doze, DNS guest și cache npm corupt. Sursele au fost corectate,
+CI-ul [41461840367](https://github.com/JDscript1/godot-ai-android/actions/runs/41461840367)
+a trecut, iar APK-ul `47a8c87f` a fost verificat, instalat peste versiunea
+veche, cu datele și `opencode v2.2.5` păstrate, apoi livrat în Download.
+TUI-ul și furnizorul live rămân de probat; ecranul blocat a împiedicat
+confirmarea vizuală.
 
 ## AG-83 — OmniRoute self-hosted cu cheie API, Termux sau hotspot — 2.11.2026
 

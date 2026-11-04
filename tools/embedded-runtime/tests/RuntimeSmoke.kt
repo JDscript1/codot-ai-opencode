@@ -11,7 +11,7 @@ fun main(args: Array<String>) {
     val core = AILinuxRuntimeFiles(directory, native, { File(assets, it).inputStream() }, progress = { print(it) })
     when (args[3]) {
         "install" -> { core.install(listOf("1.1.1.1", "8.8.8.8")); check(core.state().getBoolean("ready")) }
-        "tools" -> for (tool in listOf("python", "node", "git", "ripgrep")) core.installTool(tool)
+        "tools" -> check(core.verify().getBoolean("ready"))
         "execute" -> {
             val project = File(directory, "project").apply { mkdirs() }
             File(project, "project.godot").writeText("config_version=5\n")

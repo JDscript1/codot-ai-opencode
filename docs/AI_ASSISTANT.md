@@ -11,7 +11,13 @@ tab at the top right of the editor, next to **Asset Store**. Its **Setări** but
 opens the same global configuration window.
 
 - **Furnizori:** select an issuer or paste a distinctive API key. Generic keys such
-  as `sk-...` require an issuer selection. OpenCode Zen uses one API key and its
+  as `sk-...` require an issuer selection. Meta Model API uses the official
+  `https://api.meta.ai/v1` Responses endpoint and API keys beginning with `LLM_`
+  (or the `MODEL_API_KEY` label). Its catalog shows Muse Wonder and text/agentic
+  Muse Spark models, including `muse-spark-1.3-contributor`. Contributor mode is
+  cheaper because Meta may use the prompts, code and responses for model
+  training; Standard mode is listed separately and Contributor is never selected
+  automatically. OpenCode Zen uses one API key and its
   model catalog declares whether each model uses chat, Responses, Anthropic
   messages or Gemini generation; the harness routes the selected model automatically.
   OpenCode can restrict free-tier models to its own client, so another MCP/API
@@ -24,6 +30,15 @@ opens the same global configuration window.
   self-hosted server behind a public HTTPS domain.
 - **Abonamente:** use **Continue with ChatGPT** for the native SIWC flow. Claude,
   Copilot and Kimi use the optional companion on your own computer/server.
+  On Android, API-key and local profiles use the app-owned [Pi RPC harness](PI_RPC.md);
+  SIWC and companion profiles intentionally fall back to the native harness.
+  ChatGPT sign-in uses a stable `127.0.0.1:1455/auth/callback` listener (or a
+  previously saved callback port) and does not put the saved ID token in the
+  browser URL. ChatGPT plan usage requires an eligible Plus/Pro account. If the
+  OpenAI consent page remains on its spinner, first retry in Chrome Incognito
+  with adblock/VPN extensions disabled, then use **Reînregistrează ChatGPT**.
+  The consent page is hosted by OpenAI; without a callback the app cannot
+  complete the exchange.
 - **Generare:** choose Runware, Meshy, Tripo, OpenAI Images or an existing ComfyUI
   server. Import a workflow exported in API format, bind its prompt/reference fields
   and output node, then validate the server. PNG and self-contained GLB 2.0 are supported.
@@ -36,20 +51,22 @@ opens the same global configuration window.
 - **MCP:** add a Streamable HTTP endpoint and optional Bearer token. For stdio,
   configure the process in the companion and connect to its `/mcp/<name>` URL.
 - **General:** YOLO, center/left/right chat placement and completion sounds.
-- **Integrări:** GitHub cu token personal și selecție de repository, Blender CLI desktop și [configurare Blender prin Termux pe Android](AI_TERMUX_BLENDER.md) inclusă în APK; validarea fizică a Intent-ului este separată.
+- **Integrări:** GitHub cu token personal și selecție de repository, Blender CLI desktop și Blender 4.3.2 ARM64 inclus în APK pe Android. Configurarea Android folosește runtime-ul Linux al aplicației, fără Termux; [conectorul Termux](AI_TERMUX_BLENDER.md) rămâne fallback istoric pentru APK-uri vechi.
   Skills și Sarcini au pagini principale proprii. Configurarea GitHub este descrisă în
   [integrations](AI_INTEGRATIONS.md).
 - **AGENT.MD:** edit project memory in `AGENT.md`; existing `AGENTS.md` is preserved.
 
-The current APK is `a23d260`, including control/integrations/generation and
-[chat files, previews, editor control, Store and real diff](AI_CHAT_FILES_AND_EDITOR_CONTROL.md).
-It also includes the subsequent harness/local-connection fixes, activity drawer,
-3D preview controls, image-purpose rules and optional Termux/Blender setup.
-The Android Blender card has one install action, automatic verification and agent
-activation, then a compact **Blender Active** status and **Uninstall Blender**.
-Diagnostics and worker output are in Journal; package removal preserves containers
-and user files. Terminal-only Termux variants still require pasting the private
-bootstrap before setup continues automatically.
+The current installers are built from `87563a46cd` and include the Pi RPC
+harness, Meta Model API (Muse Spark Standard and Contributor), control and
+integrations, [chat files, previews, editor control, Store and real
+diff](AI_CHAT_FILES_AND_EDITOR_CONTROL.md), activity drawer, 3D preview controls,
+image-purpose rules, bundled Android Blender setup, and the SIWC ChatGPT
+callback/registration fixes.
+The Android Blender card has one local preparation action, automatic version
+verification and agent activation. The packages come from the signed APK; no
+Termux bootstrap or network download is involved. Diagnostics and process output
+remain in Journal. On builders without the packaged Linux runtime, the legacy
+Termux card remains available as a fallback.
 Delivery evidence is recorded in [the project progress document](../PROGRES_SI_PLAN.md).
 
 HTTP is opt-in per local connection. `127.0.0.1` means this Android device; a server
@@ -111,7 +128,10 @@ IP still matter, and reconnecting can change that IP. A model loaded in LM
 Studio does not by itself enable LAN serving. The editor does not silently scan
 or reconnect to a different discovered host using a saved token.
 
-Sources: [LM Studio LAN hosting](https://lmstudio.ai/docs/developer/core/server/serve-on-network),
+Sources: [Meta Model API](https://dev.meta.ai/docs/overview),
+[Meta Models](https://dev.meta.ai/docs/models),
+[Meta pricing](https://dev.meta.ai/docs/pricing-rate-limits),
+[LM Studio LAN hosting](https://lmstudio.ai/docs/developer/core/server/serve-on-network),
 [Ollama network binding](https://docs.ollama.com/faq#how-do-i-configure-ollama-server),
 [Ollama model catalog](https://docs.ollama.com/api/tags),
 [Ollama loaded models](https://docs.ollama.com/api/ps),
@@ -153,15 +173,32 @@ The Romanian [project progress record](../PROGRES_SI_PLAN.md) tracks implemented
 work, verification, the delivered APK, and the remaining plan. It is updated at
 each substantial AI development/build/delivery milestone.
 
-The [built-in agent harness](AI_HARNESS.md) runs direct-provider turns inside
-Godot, including independent child sessions. Its model/tool loop does not require
-Termux, a console, an external agent SDK, or the optional companion. It owns
-streaming events, bounded model retries, cancellation, result deduplication, and
-checkpoint handling. The model endpoint itself remains a separately configured
-cloud or local service. Companion-backed subscriptions and MCP stdio retain their
-existing optional external hosts.
+The [built-in agent harness](AI_HARNESS.md) remains the fallback for ChatGPT
+SIWC, companion subscriptions, and profiles without a Pi route. It still runs
+direct-provider turns inside Godot, including independent child sessions, and
+does not require Termux, a console, an external agent SDK, or the companion.
 
-Direct runs discover specialized tools through `tool_search`/`tool_describe`.
+On Android, **Agent AI** now uses the app-owned [Pi 1.5.0 RPC harness](PI_RPC.md)
+for API-key and local profiles. Pi is installed privately inside the existing
+Debian/PRoot runtime and is controlled through JSONL RPC. Its native `read`,
+`bash`, `edit`, `write`, `grep`, `find`, and `ls` tools run directly in PRoot.
+The complete Godot tool catalog is exposed through a loopback MCP server with
+`deferred` exposure. Pi discovers tools with its native `tool_search`, calls
+them directly, and owns the session, context compaction, and memory. Stable app
+instructions live in Pi's `APPEND_SYSTEM.md`; the per-turn prompt contains only
+the mode, selected files/references/images, and the user request. The AI
+Assistant panel owns streaming, UI history, approvals, and edit cards; there is
+no Pi tab or terminal. The Pi process is kept alive across turns and restarted
+only when the conversation, provider, model, mode, or credential set changes.
+
+Plan and Ask remain read-only. Auto and Default receive the full Pi tool set;
+application MCP writes retain the existing Plan/Auto checks and native approval
+dialog, while native Pi file/shell operations intentionally run without that
+dialog. Native Pi changes are observed with bounded snapshots but do not gain a
+new exact rollback guarantee. This is a product tradeoff, not an isolation
+boundary. Pi runs with the permissions of the app-owned PRoot filesystem.
+
+Direct native runs discover specialized tools through `tool_search`/`tool_describe`.
 Coding tools include bounded line reads/search, version-checked exact patches
 with preview/recovery, and a native GDScript diagnostics bridge. MCP results
 preserve structured data and model images and expose execution errors. See the

@@ -292,3 +292,9 @@
 *.py                                          @godotengine/buildsystem
 SConstruct                                    @godotengine/buildsystem
 SCsub                                         @godotengine/buildsystem
+
+# Godot AI fork
+
+/modules/ai_assistant/                             @JDscript1
+/docs/                                             @JDscript1
+/tools/                                            @JDscript1

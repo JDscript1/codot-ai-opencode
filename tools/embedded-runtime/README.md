@@ -3,9 +3,14 @@
 This directory builds PRoot and its loader for Android ARM64/API 29+. The
 result depends on Android system libraries, not on an installed Termux app.
 Python and make are build tools only. The current source also packages a pinned
-Debian filesystem which prepares automatically on first launch;
-Python/Node/Git/ripgrep/Blender are optional in-app installs.
-Blender and third-party agent harnesses have not been validated in the Godot APK.
+Debian filesystem, Node.js, the Pi harness, Git, ripgrep, Python, Blender 4.3.2
+and an offline Debian package repository into the APK. The Ziva distribution
+additionally contains the official Ziva addon/runtime, Godot Linux ARM64 and the
+required GUI libraries. Runtime installation therefore reads only APK assets;
+it does not contact npm, GitHub, nodejs.org or a Debian mirror. Blender is
+installed from the same signed offline repository by the bundled Blender
+preparation action. Blender and third-party agent harnesses have not yet been
+validated in the installed Godot APK.
 
 ```sh
 python3 build.py --ndk /path/to/android-ndk \
@@ -25,6 +30,13 @@ Output:
 - `assets/godot_ai/embedded/linux-probe`: tiny libc-free Linux ELF guest.
 - `assets/godot_ai/embedded/manifest.json`: component versions and file hashes.
 - `assets/godot_ai/embedded/licenses/`: upstream license notices.
+- `assets/godot_ai/packages/manifest.json`: pinned versions, sizes and hashes
+  for the offline runtime package set.
+- `assets/godot_ai/packages/node-*.tar.xz` and `pi-*.tgz`: Node.js and Pi.
+- `assets/godot_ai/packages/debian-offline.zip`: a flat apt repository with
+  every dependency needed by the selected distribution.
+- Ziva-only assets: official addon, CEF runtime, Godot Linux ARM64. Ziva is
+  proprietary and is bundled only for this personal, non-commercial build.
 - `corresponding-sources.tar.gz`: original upstream archives, pinned checksums,
   build instructions and the script containing all source changes.
 
@@ -67,6 +79,22 @@ optional Ziva addon and official Godot installers with fixtures: archive and
 binary hashes, unsafe paths, cancellation and preservation of the previous
 install. These development controls are distinct from the installed Godot service.
 See [the runtime document](../../docs/AI_LINUX_RUNTIME.md) for current evidence.
+
+## Offline package set
+
+`packages.py --work <cache> --output <generated> --distribution
+standard|ziva-preview` downloads each pinned upstream archive, verifies its
+SHA-256 and creates the flat Debian repository. It resolves Debian dependencies
+for arm64 starting from the exact package status inside the pinned rootfs, so
+the result contains only packages missing or too old in that base. APT receives
+an empty source-parts directory and only the `file:` repository, and runtime code
+does not run `apt-get update` against a network source.
+
+`python test_packages.py` covers Debian version ordering, alternatives,
+transitive dependencies, repository metadata and source pinning. The package
+action is exposed only after APK asset hashes have been verified. It stops Pi
+and Ziva first, installs into staging where possible, preserves `/root/.pi`,
+and reports actual command output in Settings → Actualizare pachete.
 
 Ziva lifecycle coverage now also includes `tests/ZivaSessionTest.kt` (kernel
 lease ownership, process death, stale saved status and PID-specific endpoint

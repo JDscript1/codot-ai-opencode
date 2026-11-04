@@ -296,8 +296,8 @@ func _run() -> void:
 	while EditorInterface.get_resource_filesystem().is_scanning() or EditorInterface.get_resource_filesystem().is_importing(): await get_tree().process_frame
 	await get_tree().process_frame
 	var directory = OS.get_environment("GODOT_AI_QA_SOURCE")
-	var bindings = {"common": "Common", "engineering_store": "EngineeringStore", "qa_scenarios": "QAScenarios", "asset_audit": "AssetAudit", "experiments": "Experiments", "engineering": "Engineering", "project_knowledge": "ProjectKnowledge", "diagnostics": "Diagnostics", "verification": "Verification", "diff": "Diff", "change_set": "ChangeSet", "transport": "Transport", "tool_registry": "ToolRegistry", "model_pricing": "ModelPricing", "providers": "Providers", "panel_reader": "PanelReader", "editor_tools": "Tools", "mcp": "MCP", "asset_exports": "AssetExports", "generation_catalog": "GenerationCatalog", "assets": "Assets", "accounts": "Accounts", "conversations": "Conversations", "icons": "Icons", "planner": "Planner", "markdown": "Markdown", "tool_preview": "ToolPreview", "diagram": "Diagram", "file_registry": "FileRegistry", "model_preview": "ModelPreview", "media_view": "MediaView", "chat_view": "ChatView", "harness": "Harness", "agent_jobs": "AgentJobs", "speech": "Speech", "workspace": "Workspace", "termux_blender": "TermuxBlender", "linux_runtime": "LinuxRuntime", "ziva": "Ziva", "ziva_screen": "ZivaScreen", "integrations": "Integrations", "store": "Store", "editor_control": "EditorControl"}
-	for name in ["common", "engineering_store", "qa_scenarios", "asset_audit", "experiments", "engineering", "project_knowledge", "diagnostics", "verification", "diff", "change_set", "transport", "tool_registry", "model_pricing", "providers", "panel_reader", "editor_tools", "mcp", "asset_exports", "generation_catalog", "assets", "accounts", "conversations", "icons", "planner", "markdown", "tool_preview", "diagram", "file_registry", "model_preview", "media_view", "chat_view", "harness", "agent_jobs", "speech", "workspace", "termux_blender", "linux_runtime", "ziva", "ziva_screen", "integrations", "store", "editor_control", "panel"]:
+	var bindings = {"common": "Common", "engineering_store": "EngineeringStore", "qa_scenarios": "QAScenarios", "asset_audit": "AssetAudit", "experiments": "Experiments", "engineering": "Engineering", "project_knowledge": "ProjectKnowledge", "diagnostics": "Diagnostics", "verification": "Verification", "diff": "Diff", "change_set": "ChangeSet", "transport": "Transport", "tool_registry": "ToolRegistry", "model_pricing": "ModelPricing", "providers": "Providers", "panel_reader": "PanelReader", "editor_tools": "Tools", "mcp": "MCP", "asset_exports": "AssetExports", "generation_catalog": "GenerationCatalog", "assets": "Assets", "accounts": "Accounts", "conversations": "Conversations", "icons": "Icons", "planner": "Planner", "markdown": "Markdown", "tool_preview": "ToolPreview", "diagram": "Diagram", "file_registry": "FileRegistry", "model_preview": "ModelPreview", "media_view": "MediaView", "chat_view": "ChatView", "harness": "Harness", "agent_jobs": "AgentJobs", "speech": "Speech", "workspace": "Workspace", "termux_blender": "TermuxBlender", "linux_runtime": "LinuxRuntime", "ziva": "Ziva", "ziva_screen": "ZivaScreen", "integrations": "Integrations", "store": "Store", "editor_control": "EditorControl", "godot_mcp": "GodotMCP", "pi_session": "PiSession"}
+	for name in ["common", "engineering_store", "qa_scenarios", "asset_audit", "experiments", "engineering", "project_knowledge", "diagnostics", "verification", "diff", "change_set", "transport", "tool_registry", "model_pricing", "providers", "panel_reader", "editor_tools", "mcp", "asset_exports", "generation_catalog", "assets", "accounts", "conversations", "icons", "planner", "markdown", "tool_preview", "diagram", "file_registry", "model_preview", "media_view", "chat_view", "harness", "agent_jobs", "speech", "workspace", "termux_blender", "linux_runtime", "ziva", "ziva_screen", "integrations", "store", "editor_control", "godot_mcp", "pi_session", "panel"]:
 		var script = GDScript.new()
 		script.source_code = FileAccess.get_file_as_string(directory.path_join("runtime/" + name + ".gd"))
 		var error = script.reload()
@@ -316,7 +316,7 @@ func _run() -> void:
 	panel.model_pricing.transport = AgentPricingTransport.new()
 	EditorInterface.set_main_screen_editor("AI Assistant" if native else "AI Assistant QA")
 	await get_tree().process_frame
-	_check(panel.profile_picker != null and panel.settings_tabs.get_tab_count() == 13, "Build all settings forms")
+	_check(panel.profile_picker != null and panel.settings_tabs.get_tab_count() == 14, "Build all settings forms")
 	var independent_ziva = EditorInterface.get_editor_main_screen().find_child("ZivaMainScreen", true, false)
 	if independent_ziva != null:
 		_check(not independent_ziva.management.visible, "The hidden Ziva tab never opens an exclusive management window at startup")
@@ -404,6 +404,10 @@ func _run() -> void:
 		await _linux_runtime_tests(OS.get_environment("GODOT_AI_QA_OUTPUT"))
 		_finish_report(OS.get_environment("GODOT_AI_QA_OUTPUT"))
 		return
+	if OS.get_environment("GODOT_AI_QA_SCENARIO") == "packages":
+		await _packages_settings_tests(true)
+		_finish_report(OS.get_environment("GODOT_AI_QA_OUTPUT"))
+		return
 	if OS.get_environment("GODOT_AI_QA_SCENARIO") == "ziva":
 		await _ziva_tests(OS.get_environment("GODOT_AI_QA_OUTPUT"))
 		_finish_report(OS.get_environment("GODOT_AI_QA_OUTPUT"))
@@ -457,6 +461,7 @@ func _run() -> void:
 	await _change_set_editor_tests()
 	await _history_button_tests()
 	await _settings_action_tests()
+	await _packages_settings_tests(false)
 	await _provider_connection_tests("")
 	await _generation_catalog_tests("")
 	await _provider_discovery_tests("")
@@ -1945,6 +1950,29 @@ func _settings_action_tests() -> void:
 		child.queue_free()
 	panel._refresh_lists()
 	DirAccess.remove_absolute(path)
+	await get_tree().process_frame
+
+func _packages_settings_tests(screenshot: bool) -> void:
+	var bridge = FixtureLinuxBridge.new()
+	add_child(bridge)
+	panel.ziva_runtime = bridge
+	panel.open_settings("packages")
+	await get_tree().process_frame
+	panel._packages_refresh(false)
+	_check(panel.section_tabs.has("packages") and panel.settings_tabs.get_tab_title(panel.section_tabs["packages"]) == "Actualizare pachete", "Packages update is the final Settings section")
+	_check(panel.package_console != null and panel.package_update != null and panel.package_copy != null, "Packages section exposes console, update and copy controls")
+	_check(panel.package_copy.text == "Copiază rezultatul", "Packages copy control is a visible text button")
+	panel.package_update.pressed.emit()
+	_check(panel.package_running and panel.package_job == "fixture-packages-job", "Packages update starts an owned cancellable job")
+	panel._packages_poll()
+	_check(not panel.package_running and "Pachete actualizate din fixture." in panel.package_console.text, "Packages console renders the completed update output")
+	if screenshot:
+		var output = OS.get_environment("GODOT_AI_QA_OUTPUT")
+		if not output.is_empty():
+			panel.settings_window.get_texture().get_image().save_png(output.path_join("packages-settings.png"))
+	panel.settings_window.hide()
+	panel.ziva_runtime = null
+	bridge.queue_free()
 	await get_tree().process_frame
 
 func _layout_tests() -> void:
@@ -3889,6 +3917,16 @@ class FixtureLinuxBridge:
 	var cancelled = false
 	func linux_runtime_request(action: String, args: Dictionary) -> Dictionary:
 		if action == "status": return state.duplicate(true)
+		if action == "packages_status":
+			return {"ok": true, "bundled": true, "distribution": "standard", "all_ready": true, "active_job": "", "last_job": "",
+				"linux": {"ready": true, "current": true, "release": "trixie"}, "debian": {"ready": true, "packages": 3},
+				"node": {"ready": true, "version": "22.19.0"}, "pi": {"ready": true, "version": "1.5.0"},
+				"ziva": {"bundled": false, "ready": false}, "godot": {"bundled": false, "ready": false}, "manifest": {"versions": {}}}
+		if action == "packages_update":
+			return {"ok": true, "id": "fixture-packages-job", "status": "queued"}
+		if action == "packages_poll":
+			return {"ok": true, "status": "completed", "output": "Pachete actualizate din fixture.\n", "result": linux_runtime_request("packages_status", {})}
+		if action == "packages_cancel": return {"ok": true, "cancelling": true}
 		if action == "cancel": cancelled = true; return {"ok": true}
 		if action == "poll":
 			polls += 1
@@ -3898,10 +3936,14 @@ class FixtureLinuxBridge:
 			if fail: return {"ok": true, "status": "failed", "error": "Verificarea runtime a eșuat.", "output": "diagnostic fixture"}
 			var result = {}
 			match str(pending.get("action", "")):
-				"prepare", "install", "verify": state.merge({"installed": true, "ready": true}, true); result = state.duplicate(true)
-				"tool_install":
-					state["tools"][pending["args"]["tool"]] = {"ready": true, "version": "fixture 1.0"}
-					result = state.duplicate(true)
+				"prepare", "install", "verify":
+					state.merge({"installed": true, "ready": true, "tools": {
+						"python": {"ready": true, "version": "Python 3.13.5"},
+						"node": {"ready": true, "version": "v22.19.0"},
+						"git": {"ready": true, "version": "git version 2.47.3"},
+						"ripgrep": {"ready": true, "version": "ripgrep 14.1.1"},
+						"blender": {"ready": true, "version": "Blender 4.3.2", "python": true},
+					}}, true); result = state.duplicate(true)
 				"execute": result = {"exit_code": 0, "output": "LINUX_FIXTURE_OK", "truncated": false}
 				"uninstall": state.merge({"installed": false, "ready": false, "tools": {}}, true); result = state.duplicate(true)
 			return {"ok": true, "status": "completed", "result": result}
@@ -4101,11 +4143,10 @@ func _linux_runtime_tests(output: String) -> void:
 	await backend.ensure_ready()
 	_check(backend.available() and form["status"].text == "Linux activ" and form["tools"].visible, "Only a completed and verified Linux job enables the runtime and its utility controls")
 	_check(bridge.requests[0]["action"] == "prepare" and not form["primary"].visible, "Linux prepares automatically and hides recovery controls after success")
-	_check(panel.integration_settings.get("linux_enabled", false) and not form["buttons"]["python"].disabled, "Verified runtime becomes available for optional Python installation")
-	await panel._linux_setup("tool_install", "python")
-	_check(form["buttons"]["python"].text == "Instalat" and form["buttons"]["python"].disabled and not form["buttons"]["node"].disabled, "Tool installation reflects measured capability without claiming other tools are installed")
+	_check(panel.integration_settings.get("linux_enabled", false) and not form.has("buttons"), "Verified runtime exposes automatic package status without manual install controls")
+	_check(form["statuses"]["python"].text.begins_with("Pregătit") and form["statuses"]["blender"].text.begins_with("Pregătit"), "Automatic preparation reports Python and Blender as ready after the bundled job")
 	await backend.ensure_ready()
-	_check(form["buttons"]["python"].text == "Instalat" and backend.available(), "Automatic startup verification preserves installed optional utilities")
+	_check(form["statuses"]["python"].text.begins_with("Pregătit") and backend.available(), "Automatic startup verification preserves prepared utilities")
 	if not output.is_empty():
 		await get_tree().create_timer(0.2).timeout
 		var page = panel.settings_tabs.get_tab_control(panel.section_tabs["integrations"])
@@ -4132,7 +4173,7 @@ func _linux_runtime_tests(output: String) -> void:
 	backend.refresh()
 	_check(form["primary"].visible and form["primary"].text == "Repară", "A runtime requiring verification offers recovery without deleting tools")
 	await panel._linux_setup("prepare")
-	_check(backend.available() and form["buttons"]["python"].text == "Instalat", "Runtime recovery preserves optional utilities")
+	_check(backend.available() and form["statuses"]["python"].text.begins_with("Pregătit"), "Runtime recovery preserves prepared utilities")
 	panel.mode_picker.select(old_mode)
 	panel.full_control.button_pressed = old_yolo
 	panel.active_definitions = old_definitions

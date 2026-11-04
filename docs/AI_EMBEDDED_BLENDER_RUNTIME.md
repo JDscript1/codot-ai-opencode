@@ -2,15 +2,36 @@
 
 Ținta este un Blender CLI utilizabil de agent fără instalarea aplicației Termux și fără comenzi lipite de utilizator. Harness-ul AI rămâne în Godot; serviciul nativ este doar backend-ul opțional pentru modelare, export și randare.
 
-## Starea curentă a surselor — 25.10.2026
+## Starea curentă a surselor — 3.11.2026
 
-Runtime-ul a fost extins la un mediu Debian persistent, cu instalator nativ,
-joburi și pachete opționale în Integrări → Runtime Linux. Detaliile și probele
-sunt în [Runtime Linux integrat](AI_LINUX_RUNTIME.md). Secțiunile de mai jos
-păstrează etapele istorice ale probei PRoot. APK-ul curent `afcf2cb` din
-Downloads include noul runtime, cu pregătire automată a bazei Linux.
-Nu există încă o probă fizică a serviciului Linux complet și a Blender în
-aplicația Godot instalată.
+Blender 4.3.2 ARM64 și dependențele Debian sunt acum în arhiva offline din APK,
+nu într-un pas de descărcare. Backend-ul `AILinuxRuntimeFiles` rulează Blender
+prin PRoot-ul aplicației, montează proiectul la `/workspace`, folosește
+`--background --factory-startup --disable-autoexec` și impune
+`GODOT_AI_OUTPUT_DIR`. Integrări → Blender extrage pachetele local prin
+`packages_update`; `blender_status`, `blender_prepare` și `blender_run` sunt
+expuse Agent AI prin MCP. Fluxul Termux rămâne doar fallback istoric pentru
+APK-uri fără runtime-ul Linux împachetat.
+
+Detaliile mediului sunt în [Runtime Linux integrat](AI_LINUX_RUNTIME.md).
+Compilarea APK, instalarea fizică și proba de randare/import în aplicația
+instalată rămân dovezi separate; sursele și testele statice nu sunt prezentate
+ca probă runtime.
+
+**Probă locală 3.11.2026.** Repository-ul Debian offline cu 377 pachete a fost
+instalat prin PRoot fără rețea (`Need to get 0 B`). Blender 4.3.2 a randat
+Cycles CPU 64×64, a exportat GLB și `.blend`, iar Godot 4.7.2 ARM64 headless a
+importat GLB-ul cu un mesh. Detaliile și hash-urile sunt în
+[Blender inclus în APK](BLENDER_BUNDLE.md). Proba nu acoperă APK-ul instalat,
+Agent AI live, Eevee/GPU sau performanța pe telefon.
+
+Ambele APK-uri AG-91 au fost construite de CI și verificate local; conțin
+Blender, numpy, repository-ul offline și oferta de surse. APK-urile din Download
+au fost înlocuite, iar vechile instalatoare au fost păstrate în
+`~/godot-ai-artifacts/ag91-previous-download/`. Ulterior, distribuția Ziva a
+fost instalată pe telefon, iar proba prin PRoot-ul aplicației a confirmat
+Blender 4.3.2, randarea Cycles, GLB-ul și importul în Godot Linux din APK.
+Controlul prin chat-ul Agent AI și upgrade-ul cu altă cheie debug rămân separat.
 
 ## Etapa 1: proba de executare
 

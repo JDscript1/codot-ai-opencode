@@ -1,3 +1,33 @@
+/**************************************************************************/
+/*  ai_runtime_bridge.cpp                                                 */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #include "ai_runtime_bridge.h"
 
 #include "core/config/engine.h"
@@ -52,16 +82,16 @@ int64_t AIAssistantDebugger::request(const String &p_command, const Dictionary &
 	if (!node) {
 		return -1;
 	}
-	Array sessions = get_sessions();
+	Array session_list = get_sessions();
 	int pinned = int(p_arguments.get("__session", -1));
-	if (p_arguments.has("__session") && (pinned < 0 || pinned >= sessions.size())) {
+	if (p_arguments.has("__session") && (pinned < 0 || pinned >= session_list.size())) {
 		return -1;
 	}
 	ScriptEditorDebugger *current = pinned >= 0 ? node->get_debugger(pinned) : node->get_current_debugger();
 	if (pinned < 0 && (!current || !current->is_session_active())) {
 		// A selected stopped tab must not hide the only live game peer.
 		current = nullptr;
-		for (int i = 0; i < sessions.size(); i++) {
+		for (int i = 0; i < session_list.size(); i++) {
 			ScriptEditorDebugger *candidate = node->get_debugger(i);
 			if (candidate && candidate->is_session_active()) {
 				if (current) {
@@ -79,7 +109,7 @@ int64_t AIAssistantDebugger::request(const String &p_command, const Dictionary &
 		return -1;
 	}
 	int index = -1;
-	for (int i = 0; i < sessions.size(); i++) {
+	for (int i = 0; i < session_list.size(); i++) {
 		if (node->get_debugger(i) == current) {
 			index = i;
 			break;

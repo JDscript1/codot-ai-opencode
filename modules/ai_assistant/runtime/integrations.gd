@@ -51,12 +51,18 @@ func _init(node: Node = null, store: RefCounted = null) -> void:
 static func desktop_blender() -> bool:
 	return not OS.has_feature("android") and OS.get_name() in ["Windows", "Linux"]
 
-static func definitions(github: bool, blender: bool, android_ready: bool = false) -> Array:
+static func definitions(github: bool, blender: bool, android_ready: bool = false, bundled_packaged: bool = false, bundled_ready: bool = false) -> Array:
 	var result = []
 	if github:
 		result.append(Common.tool("github_read", "Inspect the configured GitHub repository: repository, branches, issues, pulls or a file/directory. No git CLI required. Lists are paginated, 30 per page.", {"resource": {"type": "string", "enum": ["repository", "branches", "issues", "pulls", "contents"]}, "path": Common.string_field(), "ref": Common.string_field(), "page": {"type": "integer", "minimum": 1, "maximum": 100}}, ["resource"]))
 		result.append(Common.tool("github_create_issue", "Create an issue in the configured repository only when the user requested it. This publishes externally. Never put credentials or private project data into the issue.", {"title": Common.string_field(), "body": Common.string_field()}, ["title", "body"], "external"))
-	if blender and android_ready:
+	if blender and bundled_packaged:
+		result.append(Common.tool("blender_status", "Inspect the Blender CLI bundled in this application. Reports whether Linux and the Blender packages are ready, the measured version, and that Termux is not required.", {}, [], "read"))
+		if not bundled_ready:
+			result.append(Common.tool("blender_prepare", "Prepare the Blender packages already bundled in this APK. This installs the signed offline Debian packages; it never downloads Blender or contacts a package registry. It can take several minutes and requires Agent AI and Ziva to be stopped. Use only when the user requested Blender or the task needs it.", {}, [], "external"))
+		else:
+			result.append(Common.tool("blender_run", "Run a saved project Python script with the bundled Blender CLI in background mode. The Godot project is mounted at /workspace. Read declared inputs through os.environ['GODOT_AI_PROJECT_DIR'] and write all generated files under os.environ['GODOT_AI_OUTPUT_DIR']. Blender Python has the full Blender API. Inspect the script first, save a GLB preview for Godot, and verify the returned output paths. PRoot is not a security sandbox. Never download packages or change the runtime through this tool.", {"script": Common.string_field(), "blend": Common.string_field(), "inputs": {"type": "array", "maxItems": 126, "items": {"type": "string"}}, "output_directory": Common.string_field(), "seconds": {"type": "integer", "minimum": 1, "maximum": 1800}}, ["script"], "external"))
+	elif blender and android_ready:
 		result.append(Common.tool("blender_run", "Run a saved project Python script in the verified Android Termux Blender backend. Inspect the script first. Only declared project inputs are copied; use os.environ['GODOT_AI_PROJECT_DIR'] to read them and os.environ['GODOT_AI_OUTPUT_DIR'] for generated files. Returns imported project output paths. Blender Python has the permissions of its Termux backend; PRoot is not a security sandbox. Never install packages or change runtime configuration through this tool.", {"script": Common.string_field(), "blend": Common.string_field(), "inputs": {"type": "array", "maxItems": 126, "items": {"type": "string"}}, "output_directory": Common.string_field(), "seconds": {"type": "integer", "minimum": 1, "maximum": 600}}, ["script"], "external"))
 	elif blender and desktop_blender():
 		result.append(Common.tool("blender_run", "Run a saved project Python script in Blender background mode on Windows/Linux. Blender has desktop filesystem access. Inspect the script first, use explicit project output paths, then inspect/import the produced assets with Godot tools.", {"script": Common.string_field(), "blend": Common.string_field(), "seconds": {"type": "integer", "minimum": 1, "maximum": 600}}, ["script"], "external"))
@@ -117,8 +123,23 @@ func stop() -> void:
 		if OS.is_process_running(pid): OS.kill(pid)
 	processes.clear()
 
+func bundled_blender() -> bool:
+	if not OS.has_feature("android") or linux == null: return false
+	return bool(linux.state.get("packaged", false))
+
+func bundled_blender_ready() -> bool:
+	if not bundled_blender(): return false
+	var tools = linux.state.get("tools", {})
+	return tools is Dictionary and bool(tools.get("blender", {}).get("ready", false))
+
 func blender(executable: String, args: Dictionary, cancel: Dictionary = {}, version: bool = false) -> Dictionary:
 	if cancel.get("cancelled", false): return Common.failure("Blender oprit.", "cancelled")
+	if bundled_blender():
+		if version:
+			var status = linux.blender_status()
+			if not status.get("ready", false): return status
+			return Common.success({"output": str(status.get("version", ""))})
+		return await linux.blender(args, cancel)
 	if termux != null:
 		return await termux.setup("verify") if version else await termux.run(args, cancel)
 	if not desktop_blender(): return Common.failure("Blender CLI este disponibil pe Windows și Linux.", "unsupported_platform")

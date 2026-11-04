@@ -6,6 +6,7 @@ static var Transport: GDScript
 const ISSUER = "https://auth.openai.com"
 const TOKEN_ENDPOINT = ISSUER + "/api/accounts/oauth/token"
 const RESOURCE = "https://api.openai.com/v1"
+const CALLBACK_PORT = 1455
 var transport: RefCounted
 var vault: RefCounted
 var owner: Node
@@ -23,26 +24,25 @@ static func authorization_parameters(profile: Dictionary, saved_tokens: Variant,
 	if client_id.is_empty(): client_id = "dynamic_agent_client"
 	var parameters = {"client_id": client_id, "ext_agent_host_id": profile.get("host_id", "urn:uuid:" + Common.uid()), "response_type": "code", "redirect_uri": callback_uri, "scope": "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct", "resource": RESOURCE, "state": state, "nonce": nonce, "code_challenge": _base64url(verifier.sha256_buffer()), "code_challenge_method": "S256"}
 	if client_id == "dynamic_agent_client": parameters["agent_name_hint"] = "Godot AI"
-	if saved_tokens is Dictionary:
-		var id_token_hint = str(saved_tokens.get("id_token", ""))
-		if not id_token_hint.is_empty(): parameters["id_token_hint"] = id_token_hint
 	var label = str(profile.get("name", ""))
 	var email = label.get_slice(" · ", 1) if " · " in label else ""
+	if email.is_empty() and saved_tokens is Dictionary: email = str(saved_tokens.get("email", ""))
 	if "@" in email: parameters["login_hint"] = email
 	return parameters
 
 func login_chatgpt(profile: Dictionary, cancel: Dictionary, on_status: Callable = Callable()) -> Dictionary:
 	if pending: return Common.failure("Există deja o autentificare în curs.")
 	pending = true
-	var listener = TCPServer.new()
-	if listener.listen(0, "127.0.0.1") != OK:
+	var saved_tokens: Variant = Common.parse_json(vault.read(str(profile["id"])))
+	var callback_listener := _listen_callback(saved_tokens)
+	if not callback_listener.get("ok", false):
 		pending = false
-		return Common.failure("Callbackul local nu poate fi pornit.")
-	var callback_uri = "http://127.0.0.1:%s/auth/callback" % listener.get_local_port()
+		return callback_listener
+	var listener = callback_listener["listener"]
+	var callback_uri = "http://127.0.0.1:%s/auth/callback" % int(callback_listener["port"])
 	var verifier = _base64url(Crypto.new().generate_random_bytes(48))
 	var state = _base64url(Crypto.new().generate_random_bytes(32))
 	var nonce = _base64url(Crypto.new().generate_random_bytes(32))
-	var saved_tokens: Variant = Common.parse_json(vault.read(str(profile["id"])))
 	var parameters = authorization_parameters(profile, saved_tokens, callback_uri, state, nonce, verifier)
 	var client_id = str(parameters["client_id"])
 	if on_status.is_valid(): on_status.call("Continuă autentificarea în browser. Revino aici după autorizare.")
@@ -53,6 +53,7 @@ func login_chatgpt(profile: Dictionary, cancel: Dictionary, on_status: Callable 
 		return Common.failure("Browserul nu a putut fi deschis.")
 	var deadline = Time.get_ticks_msec() + 300000
 	var callback = {}
+	var warned_slow := false
 	while not cancel.get("cancelled", false) and Time.get_ticks_msec() < deadline:
 		if listener.is_connection_available():
 			var peer = listener.take_connection()
@@ -75,6 +76,9 @@ func login_chatgpt(profile: Dictionary, cancel: Dictionary, on_status: Callable 
 			if valid_state:
 				callback = parsed
 				break
+		if not warned_slow and Time.get_ticks_msec() > deadline - 255000:
+			warned_slow = true
+			if on_status.is_valid(): on_status.call("Browserul OpenAI nu a finalizat consentul. Încearcă Chrome Incognito, dezactivează adblock/VPN și verifică planul Plus/Pro. Aștept încă 4 minute.")
 		await owner.get_tree().process_frame
 	listener.stop()
 	pending = false
@@ -83,8 +87,12 @@ func login_chatgpt(profile: Dictionary, cancel: Dictionary, on_status: Callable 
 	var issued_id = str(callback.get("client_id", client_id))
 	if issued_id == "dynamic_agent_client" or (client_id != "dynamic_agent_client" and issued_id != client_id): return Common.failure("Înregistrarea OAuth nu a returnat clientul așteptat.")
 	if not callback.has("code"): return Common.failure("Lipsește codul de autorizare.")
+	var registration: Dictionary = saved_tokens.duplicate(true) if saved_tokens is Dictionary else {}
+	registration["client_id"] = issued_id
+	registration["redirect_uri"] = callback_uri
+	if not vault.store(str(profile["id"]), JSON.stringify(registration)): return Common.failure("Înregistrarea OAuth nu a putut fi salvată.")
 	var result = await transport.request(TOKEN_ENDPOINT, HTTPClient.METHOD_POST, PackedStringArray(["Content-Type: application/x-www-form-urlencoded"]), _form({"grant_type": "authorization_code", "client_id": issued_id, "code": callback["code"], "code_verifier": verifier, "redirect_uri": callback_uri, "resource": RESOURCE}), {"cancel": cancel})
-	if not result.get("ok", false): return Common.failure("Schimbul codului OAuth nu a reușit. Pornește o autentificare nouă.", "oauth_exchange_failed")
+	if not result.get("ok", false): return Common.failure("Schimbul codului OAuth nu a reușit (" + _oauth_failure(result) + "). Pornește o autentificare nouă.", "oauth_exchange_failed")
 	var tokens: Variant = result.get("json")
 	if not tokens is Dictionary or not tokens.has("id_token") or not tokens.has("access_token"): return Common.failure("Răspuns OAuth incomplet.")
 	var identity = await validate_id_token(str(tokens["id_token"]), issued_id, nonce, cancel)
@@ -92,6 +100,9 @@ func login_chatgpt(profile: Dictionary, cancel: Dictionary, on_status: Callable 
 	if profile.has("subject") and profile["subject"] != identity["result"]["sub"]: return Common.failure("Contul autorizat diferă de profilul selectat.")
 	if not "chatgpt.tokens.use.direct" in str(tokens.get("scope", "")).split(" "): return Common.failure("Contul nu a acordat utilizarea planului ChatGPT.", "plan_permission_missing")
 	tokens["client_id"] = issued_id
+	tokens["redirect_uri"] = callback_uri
+	tokens["ext_agent_host_id"] = parameters["ext_agent_host_id"]
+	tokens["email"] = str(identity["result"].get("email", ""))
 	tokens["expires_at"] = Time.get_unix_time_from_system() + float(tokens.get("expires_in", 3600))
 	tokens["subject"] = identity["result"]["sub"]
 	if not vault.store(str(profile["id"]), JSON.stringify(tokens)): return Common.failure("Tokenurile nu au putut fi salvate în seiful dispozitivului.")
@@ -99,10 +110,43 @@ func login_chatgpt(profile: Dictionary, cancel: Dictionary, on_status: Callable 
 	connected["client_id"] = issued_id
 	connected["subject"] = identity["result"]["sub"]
 	connected["host_id"] = parameters["ext_agent_host_id"]
+	connected["email"] = str(identity["result"].get("email", ""))
 	connected["name"] = "ChatGPT · " + str(identity["result"].get("email", "Cont conectat"))
 	connected["kind"] = "siwc"
 	connected["url"] = RESOURCE
 	return Common.success(connected)
+
+func _listen_callback(saved_tokens: Variant) -> Dictionary:
+	var ports := [CALLBACK_PORT]
+	if saved_tokens is Dictionary:
+		var saved_uri := str(saved_tokens.get("redirect_uri", ""))
+		var parsed: Dictionary = Common.parse_url(saved_uri, true)
+		var saved_port: int = int(parsed.get("port", 0)) if parsed.get("ok", false) else 0
+		if saved_port > 0 and saved_port <= 65535 and not saved_port in ports: ports.push_front(saved_port)
+	for requested in ports:
+		var listener = TCPServer.new()
+		if listener.listen(int(requested), "127.0.0.1") == OK:
+			return {"ok": true, "listener": listener, "port": listener.get_local_port()}
+	var fallback = TCPServer.new()
+	if fallback.listen(0, "127.0.0.1") == OK:
+		return {"ok": true, "listener": fallback, "port": fallback.get_local_port()}
+	return Common.failure("Callbackul local nu poate fi pornit. Închide alt program care folosește portul 1455 și reîncearcă.", "callback_unavailable")
+
+static func _oauth_failure(result: Dictionary) -> String:
+	var payload: Variant = result.get("json")
+	if payload is Dictionary:
+		var error: Variant = payload.get("error")
+		var text := ""
+		if error is Dictionary:
+			text = str(error.get("message", error.get("code", "")))
+		else:
+			text = str(error)
+		var description := str(payload.get("error_description", ""))
+		if not description.is_empty(): text += (": " if not text.is_empty() else "") + description
+		if not text.is_empty(): return text.left(400)
+	var status := int(result.get("status", 0))
+	if status > 0: return "HTTP %d" % status
+	return str(result.get("error", "răspuns necunoscut")).left(400)
 
 func ensure_access(profile: Dictionary, cancel: Dictionary) -> Dictionary:
 	var tokens: Variant = Common.parse_json(vault.read(str(profile["id"])))

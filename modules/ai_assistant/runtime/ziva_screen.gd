@@ -97,7 +97,7 @@ func _action(action: String) -> void:
 func _build_management() -> void:
 	management = Window.new()
 	management.hide()
-	management.title = "Ziva · Instalare și actualizări"
+	management.title = "Ziva · Instalare și pachete"
 	management.transient = true
 	management.exclusive = true
 	management.min_size = Vector2i(240, 180)
@@ -115,11 +115,11 @@ func _build_management() -> void:
 	version_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(version_label)
 	_button(content, "Repară instalarea", func() -> void: _action("install"))
-	_button(content, "Verifică actualizări Ziva", func() -> void: _action("check_updates"))
+	_button(content, "Verifică pachetele locale", func() -> void: _action("check_updates"))
 	updates_label = Label.new()
 	updates_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(updates_label)
-	update_button = _button(content, "Actualizează Ziva", func() -> void: _action("update"))
+	update_button = _button(content, "Reinstalează din APK", func() -> void: _action("update"))
 	_button(content, "Instalare și condiții ↗", func() -> void: OS.shell_open("https://ziva.sh/docs/installation"))
 
 func _settings() -> void:
@@ -156,7 +156,7 @@ func _refresh() -> void:
 	if not error_text.is_empty(): hint.text = error_text
 	version_label.text = "Ziva %s · Godot Linux separat\nSesiunea pornește automat cu proiectul și se închide împreună cu editorul." % state.get("version", "")
 	var updates: Dictionary = state.get("updates", {})
-	updates_label.text = str(updates.get("message", "Poți verifica versiunea oficială disponibilă aici."))
+	updates_label.text = str(updates.get("message", "Ziva este inclusă în APK și folosește exclusiv pachetele locale."))
 	update_button.visible = bool(updates.get("available", false))
 	update_button.disabled = (working and not state.get("running", false)) or not enabled
 	hint.tooltip_text = hint.text

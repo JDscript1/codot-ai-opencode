@@ -122,6 +122,8 @@ class AIZivaService : Service() {
         var heartbeat: ScheduledFuture<*>? = null
         try {
             check(!cancelled()) { "Operație anulată." }
+            AIMemoryGuard.ensure(this, if (action == "ziva_install") 512 else 768,
+                if (action == "ziva_install") "instalarea Ziva" else "pornirea Ziva")
             heartbeat = timer.scheduleAtFixedRate({ synchronized(lock) {
                 try { AIZivaRuntime.save(this, state) } catch (_: Exception) { }
             } }, 0, 2, TimeUnit.SECONDS)
@@ -145,38 +147,23 @@ class AIZivaService : Service() {
             val ziva = if (release == null) AIZivaPackage(runtime.root) else AIZivaPackage(runtime.root, release)
             version = ziva.version
             val godot = AIZivaGodot(runtime.root)
+            val packages = AIPackageManager.manifest(this)
             if (action == "ziva_install") {
-                val install = File(cacheDir, "ai-ziva")
-                update("installing", "Descarc pluginul oficial Ziva…")
-                val zivaValid = try { ziva.verify(); true } catch (_: Exception) { false }
-                if (!zivaValid) ziva.install(install, ::cancelled) { update("installing", it) }
-                ziva.verify()
-                val godotValid = try { godot.verify(); true } catch (_: Exception) { false }
-                if (!godotValid) godot.install(install, ::cancelled) { update("installing", it) }
-                godot.verify()
-                AIZivaDependencies(runtime.root, { command, seconds -> runtime.launch(command, null, seconds) },
-                    { AILinuxRuntime.preparePackageNetwork(this, runtime) }, extension = ziva.extension) {
-                    update("installing", it)
-                }.ensure()
+                update("installing", "Instalez componentele Debian din APK…")
+                AIPackageManager.installDebian(this, runtime, packages, ::cancelled) { update("installing", it) }
+                update("installing", "Extrag Node.js, Pi, Ziva și Godot din APK…")
+                if (!AIPackageManager.piInstalled(runtime, packages)) {
+                    AIPackageManager.installPi(this, runtime, packages, ::cancelled) { update("installing", it) }
+                }
+                AIPackageManager.installZiva(this, runtime, packages, ::cancelled) { update("installing", it) }
                 check(!cancelled()) { "Operație anulată." }
-                val version = runtime.launch(listOf(ziva.guestBinary, "--version"), null, 30)
-                check(version.getInt("exit_code") == 0 && version.getString("output").lineSequence().any { it.trim() == ziva.version }) {
-                    "Ziva s-a descărcat, dar executabilul nu a trecut verificarea."
-                }
-                val engine = runtime.launch(listOf(godot.guestBinary, "--version"), null, 30)
-                check(engine.getInt("exit_code") == 0 && engine.getString("output").contains("4.7.2.stable")) {
-                    "Godot s-a descărcat, dar executabilul nu a trecut verificarea."
-                }
-                ziva.activate()
+                runtime.verify()
                 finalStatus = "installed"
                 finalMessage = "Ziva instalat · ${ziva.version}"
             } else {
                 ziva.verify()
                 godot.verify()
-                AIZivaDependencies(runtime.root, { command, seconds -> runtime.launch(command, null, seconds) },
-                    { AILinuxRuntime.preparePackageNetwork(this, runtime) }, extension = ziva.extension) {
-                    update("starting", it)
-                }.ensure()
+                AIPackageManager.ensureZivaDependencies(this, runtime, packages, ziva, ::cancelled) { update("starting", it) }
                 val project = File(projectPath ?: error("Proiect absent.")).canonicalFile
                 check(File(project, "project.godot").isFile && !project.path.contains(':')) { "Proiect Godot invalid." }
                 val projectId = AIZivaRuntime.projectId(project)

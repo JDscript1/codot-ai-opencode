@@ -1,0 +1,136 @@
+"""Static guards for the app-owned Pi runtime and Android wiring."""
+
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+PI = ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIPiRuntime.kt"
+PANEL = ROOT / "modules/ai_assistant/runtime/panel.gd"
+MCP = ROOT / "modules/ai_assistant/runtime/godot_mcp.gd"
+PACKAGES = ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIPackageManager.kt"
+
+
+class PiRuntimeTests(unittest.TestCase):
+    def setUp(self):
+        self.source = PI.read_text()
+
+    def test_pinned_runtime_versions_and_rpc_entrypoint(self):
+        self.assertIn('const val PI_VERSION = "1.5.0"', self.source)
+        self.assertIn('const val NODE_VERSION = "22.19.0"', self.source)
+        self.assertIn('"--mode", "rpc"', self.source)
+        self.assertIn('"--no-approve"', self.source)
+        self.assertIn('"PI_CODING_AGENT_DIR"', self.source)
+
+    def test_pi_install_is_offline_and_package_backed(self):
+        self.assertNotIn("npm install", self.source)
+        self.assertNotIn("preparePackageNetwork", self.source)
+        self.assertIn("AIPackageManager.installPi", self.source)
+        packages = PACKAGES.read_text()
+        self.assertIn('const val MANIFEST_ASSET = "$ASSET_DIRECTORY/manifest.json"', packages)
+        self.assertIn("tar -xJf", packages)
+        self.assertIn("tar -xzf", packages)
+        self.assertIn("copyAsset(context, manifest", packages)
+        self.assertNotIn("AIDownload", packages)
+
+    def test_settings_expose_the_bounded_package_console(self):
+        panel = PANEL.read_text()
+        self.assertIn('_tab("Actualizare pachete", "packages")', panel)
+        self.assertIn("func _build_packages", panel)
+        self.assertIn("func _packages_update", panel)
+        self.assertIn("func _packages_cancel", panel)
+        self.assertIn('_runtime_request("packages_poll"', panel)
+        self.assertIn("DisplayServer.clipboard_set(package_console.text)", panel)
+
+    def test_mcp_allows_human_approval_time(self):
+        self.assertIn('.put("timeout", 3600)', self.source)
+        self.assertIn('provider.put("apiKey", piLiteral(key.ifEmpty { "pi-local" }))', self.source)
+        self.assertIn("if (character == '$' || character == '!') output.append('$')", self.source)
+        self.assertIn('.put("headers", JSONObject().put("Authorization", "Bearer $token"))', self.source)
+
+    def test_mcp_catalog_is_deferred_to_pi_native_tool_search(self):
+        self.assertIn('.put("exposure", "deferred")', self.source)
+        self.assertNotIn('.put("exposure", "direct")', self.source)
+        self.assertIn('"tool_search"', self.source)
+        self.assertIn("APPEND_SYSTEM.md", self.source)
+        self.assertIn('"compact"', self.source)
+        mcp = MCP.read_text()
+        self.assertIn('panel.call("agent_catalog")', mcp)
+        self.assertIn('panel.call("agent_execute", tool, arguments)', mcp)
+        self.assertNotIn('"name": "search"', mcp)
+
+    def test_user_facing_identity_is_agent_ai_not_the_harness(self):
+        self.assertIn('writeText(context, "$AGENT_DIR/SYSTEM.md", SYSTEM_INSTRUCTIONS', self.source)
+        self.assertIn("You are Agent AI", self.source)
+        self.assertNotIn("You are a coding assistant running inside pi", self.source)
+        self.assertNotIn("Pi's native", self.source)
+        panel = PANEL.read_text()
+        self.assertIn('_status("Agent AI gândește…")', panel)
+        self.assertIn('_status("Agent AI gândește…" if pi_text.is_empty() else "Agent AI răspunde…")', panel)
+        self.assertNotIn('_status("Pi lucrează…")', panel)
+        self.assertNotIn('"Pi răspunde…"', panel)
+        mcp = MCP.read_text()
+        self.assertNotIn("Pi's tool_search", mcp)
+
+    def test_full_godot_and_ziva_control_tools_are_exposed(self):
+        panel = PANEL.read_text()
+        self.assertIn("const AGENT_MCP_BLOCKED_TOOLS := []", panel)
+        for tool in (
+            "ziva_status",
+            "ziva_start",
+            "ziva_stop",
+            "ziva_restart",
+            "ziva_install",
+            "ziva_update",
+            "ziva_task_cancel",
+            "ziva_permission_reply",
+            "ziva_question_reply",
+            "ziva_question_reject",
+        ):
+            with self.subTest(tool=tool):
+                self.assertIn(f'Common.tool("{tool}"', panel)
+        ziva = (ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIZivaChat.kt").read_text()
+        self.assertIn('"permissions/reply"', ziva)
+        self.assertIn('"questions/reply"', ziva)
+        self.assertIn('"questions/reject"', ziva)
+
+    def test_native_tools_and_read_only_toolset_are_explicit(self):
+        self.assertIn(
+            'JSONArray(listOf("read", "bash", "edit", "write", "grep", "find", "ls", "tool_search"))',
+            self.source,
+        )
+        self.assertIn('"read,grep,find,ls,tool_search"', self.source)
+        self.assertIn('mode in setOf("plan", "read_only")', self.source)
+
+    def test_pi_owns_session_and_context(self):
+        panel = PANEL.read_text()
+        self.assertIn("_pi_can_reuse_session", panel)
+        self.assertIn("if not keep_session", panel)
+        self.assertIn("if not pi_owned_turn and _auto_compact_enabled()", panel)
+        start = panel.index("func _pi_prompt(")
+        end = panel.index("\nfunc _pi_images(", start)
+        prompt = panel[start:end]
+        self.assertNotIn("compact_summary", prompt)
+        self.assertNotIn("AGENT.md", prompt)
+        self.assertNotIn("Current app task plan", prompt)
+        self.assertIn("<app_turn>", prompt)
+
+    def test_app_mcp_calls_use_the_normal_approval_path(self):
+        panel = PANEL.read_text()
+        self.assertIn("var result: Dictionary = await _execute_call(name, args)", panel)
+        self.assertNotIn("await _execute_call(name, args, true)", panel)
+        self.assertIn('if result.get("ok", false): _track_verification(name)', panel)
+
+    def test_legacy_opencode_surface_is_absent(self):
+        for relative in [
+            "modules/ai_assistant/runtime/opencode.gd",
+            "modules/ai_assistant/runtime/opencode_screen.gd",
+            "platform/android/java/editor/src/main/java/org/godotengine/editor/AIOpenCodeRuntime.kt",
+            "platform/android/java/editor/src/main/java/org/godotengine/editor/AIOpenCodeWindow.kt",
+            "platform/android/java/editor/src/main/native/ai_pty.c",
+        ]:
+            with self.subTest(relative=relative):
+                self.assertFalse((ROOT / relative).exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

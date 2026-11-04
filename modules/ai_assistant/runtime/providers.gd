@@ -7,6 +7,7 @@ static var ModelPricing: GDScript
 
 const CATALOG = [
 	{"id": "openai", "name": "OpenAI", "kind": "responses", "url": "https://api.openai.com/v1", "prefix": "sk-proj-"},
+	{"id": "meta", "name": "Meta Model API", "kind": "responses", "url": "https://api.meta.ai/v1", "prefix": "LLM_"},
 	{"id": "anthropic", "name": "Anthropic Claude", "kind": "anthropic", "url": "https://api.anthropic.com/v1", "prefix": "sk-ant-"},
 	{"id": "gemini", "name": "Google Gemini", "kind": "gemini", "url": "https://generativelanguage.googleapis.com/v1beta", "prefix": "AIza"},
 	{"id": "deepseek", "name": "DeepSeek", "kind": "chat", "url": "https://api.deepseek.com", "prefix": ""},
@@ -121,6 +122,43 @@ static func _trusted_opencode_url(url: String) -> bool:
 	if not parsed.get("ok", false) or str(parsed.get("scheme", "")) != "https": return false
 	var host = str(parsed.get("host", "")).to_lower()
 	return host == "opencode.ai" or host.ends_with(".opencode.ai")
+
+const META_CONTEXT = 1048576
+const META_MAX_OUTPUT = 131072
+const META_PRICING_SOURCE = "https://dev.meta.ai/docs/pricing-rate-limits"
+
+static func _meta_price(id: String) -> Dictionary:
+	var rate = {"input": 4.0, "output": 20.0, "cached_input": 0.2} if id.begins_with("muse-wonder-") else ({"input": 0.1, "output": 0.2, "cached_input": 0.002} if id.ends_with("-contributor") else {"input": 1.25, "output": 4.25, "cached_input": 0.15})
+	rate.merge({"currency": "USD", "source": META_PRICING_SOURCE, "source_kind": "api", "checked_at": Time.get_unix_time_from_system()})
+	return rate
+
+static func _meta_model(item: Dictionary) -> Dictionary:
+	var id = str(item.get("id", "")).trim_prefix("models/")
+	if not (id.begins_with("muse-spark-") or id.begins_with("muse-wonder-")): return {}
+	var names = {
+		"muse-spark-1.3": "Muse Spark 1.3",
+		"muse-spark-1.3-contributor": "Muse Spark 1.3 Contributor",
+		"muse-spark-1.2": "Muse Spark 1.2",
+		"muse-spark-1.2-contributor": "Muse Spark 1.2 Contributor",
+		"muse-spark-1.1": "Muse Spark 1.1",
+		"muse-wonder-1.0": "Muse Wonder",
+	}
+	var efforts = ["minimal", "low", "medium", "high", "xhigh", "max"] if id == "muse-wonder-1.0" or id == "muse-spark-1.3" else ["minimal", "low", "medium", "high", "xhigh"]
+	var result = {
+		"id": id,
+		"name": str(names.get(id, item.get("display_name", item.get("name", id)))),
+		"capabilities": {"vision": true, "tools": true, "reasoning": true},
+		"context": META_CONTEXT,
+		"max_output_tokens": META_MAX_OUTPUT,
+		"efforts": efforts,
+		"source": "live",
+		"pricing": _meta_price(id),
+	}
+	var reported_context = int(item.get("context_window", 0)) if str(item.get("context_window", "0")).is_valid_int() else 0
+	if reported_context > 0: result["context"] = reported_context
+	var reported_output = int(item.get("max_output_tokens", 0)) if str(item.get("max_output_tokens", "0")).is_valid_int() else 0
+	if reported_output > 0: result["max_output_tokens"] = reported_output
+	return result
 
 static func _model_record(profile: Dictionary, model: String) -> Dictionary:
 	for item in profile.get("models", []):
@@ -275,6 +313,7 @@ static func detect(key: String, issuer: String = "") -> Dictionary:
 		normalized = normalized.substr(assignment + 1).strip_edges().trim_prefix("\"").trim_suffix("\"").trim_prefix("'").trim_suffix("'")
 		if issuer.is_empty(): issuer = label
 	if issuer == "opencode_zen": issuer = "opencode"
+	if issuer in ["model", "meta_model", "meta-model"]: issuer = "meta"
 	for entry in CATALOG:
 		if (not issuer.is_empty() and entry["id"] == issuer) or (issuer.is_empty() and not str(entry["prefix"]).is_empty() and normalized.begins_with(str(entry["prefix"]))):
 			return {"ok": true, "profile": entry.duplicate(true), "secret": normalized}
@@ -323,6 +362,10 @@ func list_models(profile: Dictionary, cancel: Dictionary = {}, key_override: Str
 		if not item is Dictionary: continue
 		if issuer == "opencode":
 			var converted = _opencode_model(item, url + "/models")
+			if not converted.is_empty(): models.append(converted)
+			continue
+		if issuer == "meta":
+			var converted = _meta_model(item)
 			if not converted.is_empty(): models.append(converted)
 			continue
 		if profile.get("kind") == "siwc" and item.get("visibility", "list") != "list": continue

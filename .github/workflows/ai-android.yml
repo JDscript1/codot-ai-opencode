@@ -43,9 +43,12 @@ jobs:
           unzip -q /tmp/godot.zip -d /tmp/godot-ai
           python modules/ai_assistant/tests/run.py --godot /tmp/godot-ai/Godot_v4.7.2-stable_linux.x86_64
           python modules/ai_assistant/tests/test_delivery.py
+          python modules/ai_assistant/tests/test_pi_runtime.py
+          python modules/ai_assistant/tests/test_blender_bundle.py
           python modules/ai_assistant/tests/test_termux_blender.py
           python tools/embedded-runtime/test_build.py
           python tools/embedded-runtime/test_rootfs.py
+          python tools/embedded-runtime/test_packages.py
       - name: Render desktop and narrow editor panels
         run: |
           sudo apt-get update -qq
@@ -75,7 +78,7 @@ jobs:
 
   android:
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 300
     env:
       SCONS_CACHE: ${{ github.workspace }}/.ai-scons-cache
       ORG_GRADLE_PROJECT_godotAiDistribution: ${{ inputs.distribution || (github.event_name == 'push' && contains(github.event.head_commit.message, '[ziva-preview]') && 'ziva-preview' || 'standard') }}
@@ -114,7 +117,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: platform/android/java/editor/build/ai-runtime-build/downloads
-          key: godot-runtime-sources-${{ hashFiles('tools/embedded-runtime/sources.json') }}
+          key: godot-runtime-sources-${{ hashFiles('tools/embedded-runtime/sources.json', 'tools/embedded-runtime/rootfs.json', 'tools/embedded-runtime/packages.json') }}
       - name: Compile editor and APK
         run: |
           scons platform=android target=editor arch=arm64 optimize=size debug_symbols=no generate_android_binaries=yes cache_path="$SCONS_CACHE" -j4
@@ -133,6 +136,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import hashlib
+          import io
           import os
           import subprocess
           import zipfile
@@ -157,13 +161,35 @@ jobs:
                   assert hashlib.sha256(data).hexdigest() == spec['sha256'], entry
               assert 'lib/arm64-v8a/libai_proot.so' in archive.namelist()
               assert 'lib/arm64-v8a/libai_proot_loader.so' in archive.namelist()
+              names = set(archive.namelist())
+              print('Runtime assets: ' + ', '.join(sorted(name for name in names if name.startswith('assets/godot_ai/'))))
               package = json.loads(archive.read('assets/godot_ai/linux/package.json'))
               rootfs = archive.read('assets/godot_ai/linux/rootfs.zip')
               assert len(rootfs) == package['size'] and hashlib.sha256(rootfs).hexdigest() == package['sha256'], 'Linux filesystem differs from package manifest'
               lock = json.loads(Path('tools/embedded-runtime/rootfs.json').read_text())
               assert package['source_sha256'] == lock['sha256'], 'Unexpected Debian base'
+              packages = json.loads(archive.read('assets/godot_ai/packages/manifest.json'))
+              assert packages['distribution'] == distribution, 'Runtime package distribution differs from APK'
+              assert packages['versions']['node'] == '22.19.0' and packages['versions']['pi'] == '1.5.0'
+              for package in ('blender', 'python3-numpy', 'python3-requests', 'python3-pil'):
+                  assert package in packages['versions']['debian']['packages'], f'Bundled package is absent: {package}'
+              for asset in packages['assets']:
+                  path = 'assets/godot_ai/packages/' + asset['name']
+                  data = archive.read(path)
+                  assert len(data) == asset['size'], path
+                  assert hashlib.sha256(data).hexdigest() == asset['sha256'], path
+              assert 'assets/godot_ai/packages/debian-offline.zip' in names
+              assert 'assets/godot_ai/BLENDER_SOURCE_OFFER.txt' in names
+              with zipfile.ZipFile(io.BytesIO(archive.read('assets/godot_ai/packages/debian-offline.zip'))) as debian_repo:
+                  assert any(name.startswith('blender_') and name.endswith('.deb') for name in debian_repo.namelist()), 'Blender Debian payload is absent'
+              if distribution == 'ziva-preview':
+                  assert packages.get('ziva') and all(key in packages['ziva'] for key in ['addon', 'runtime', 'godot'])
+                  assert 'assets/godot_ai/packages/ziva-runtime-v3.3.3-linux-arm64.zip' in names
+              else:
+                  assert packages.get('ziva') is None
+                  assert not any('ziva-runtime' in name or 'Godot_v4.7.2-stable_linux.arm64.zip' in name for name in names)
               dex = b''.join(archive.read(name) for name in archive.namelist() if name.endswith('.dex'))
-              for component in ['AILinuxRuntime', 'AILinuxRuntimeService', 'AILinuxRuntimeFiles', 'AIZivaRuntime', 'AIZivaService', 'AIZivaWindow', 'AIZivaPackage', 'AIZivaGodot', 'AIZivaDependencies', 'AIZivaSession', 'AIZivaUpdates']:
+              for component in ['AILinuxRuntime', 'AILinuxRuntimeService', 'AILinuxRuntimeFiles', 'AIPackageManager', 'AIZivaRuntime', 'AIZivaService', 'AIZivaWindow', 'AIZivaPackage', 'AIZivaGodot', 'AIZivaDependencies', 'AIZivaSession', 'AIZivaUpdates', 'AIPiRuntime']:
                   assert ('Lorg/godotengine/editor/' + component + ';').encode() in dex, component
               library = archive.read('lib/arm64-v8a/libgodot_android.so')
               assert b'AIAssistantEditorPlugin' in library, 'AI editor module missing'

@@ -75,6 +75,34 @@ object AIZivaChat {
         return JSONObject().put("ok", true).put("job_id", job.id).put("state", job.state)
     }
 
+    fun replyPermission(port: Int, requestId: String, reply: String): JSONObject {
+        if (requestId.isBlank() || requestId.length > 200) return failure("Cererea de permisiune Ziva este invalidă.", "ziva_invalid_request")
+        if (reply !in setOf("once", "always", "reject")) return failure("Răspunsul de permisiune Ziva este invalid.", "ziva_invalid_reply")
+        val result = rpc(port, "permissions/reply", JSONObject().put("requestId", requestId).put("reply", reply))
+        return JSONObject().put("ok", true).put("request_id", requestId).put("reply", reply).put("result", result)
+    }
+
+    fun replyQuestion(port: Int, requestId: String, answers: JSONArray): JSONObject {
+        if (requestId.isBlank() || requestId.length > 200) return failure("Întrebarea Ziva este invalidă.", "ziva_invalid_request")
+        if (answers.length() !in 1..8) return failure("Răspunsurile Ziva lipsesc.", "ziva_invalid_answers")
+        for (index in 0 until answers.length()) {
+            val choices = answers.optJSONArray(index) ?: return failure("Răspunsurile Ziva sunt invalide.", "ziva_invalid_answers")
+            if (choices.length() !in 1..20) return failure("Răspunsurile Ziva sunt invalide.", "ziva_invalid_answers")
+            for (choice in 0 until choices.length()) {
+                val value = choices.optString(choice, "")
+                if (value.isEmpty() || value.length > 4000) return failure("Răspunsurile Ziva sunt invalide.", "ziva_invalid_answers")
+            }
+        }
+        val result = rpc(port, "questions/reply", JSONObject().put("requestId", requestId).put("answers", answers))
+        return JSONObject().put("ok", true).put("request_id", requestId).put("result", result)
+    }
+
+    fun rejectQuestion(port: Int, requestId: String): JSONObject {
+        if (requestId.isBlank() || requestId.length > 200) return failure("Întrebarea Ziva este invalidă.", "ziva_invalid_request")
+        val result = rpc(port, "questions/reject", JSONObject().put("requestId", requestId))
+        return JSONObject().put("ok", true).put("request_id", requestId).put("result", result)
+    }
+
     private fun execute(job: Job) {
         try {
             if (job.cancelled) { finish(job, "cancelled", null); return }

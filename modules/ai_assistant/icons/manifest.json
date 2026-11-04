@@ -398,5 +398,10 @@
     "file": "lucide/route.svg",
     "url": "https://raw.githubusercontent.com/lucide-icons/lucide/20aef31db93fe4d9f398dbb15b120d99c48eef95/icons/route.svg",
     "sha256": "fc169fd38a9963b016ad6d60fd72baa2b0ea8e0cec085bbc53287297c3d8121a"
+  },
+  "Provider_meta": {
+    "file": "lobe/meta-color.svg",
+    "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/ab8cbcc6ce806b923c547628132957c8a8b61509/packages/static-svg/icons/meta-color.svg",
+    "sha256": "fcb70d240db1909994f33bab79faf916f6d9b4ba85b15ad63e970703204cdd6f"
   }
 }

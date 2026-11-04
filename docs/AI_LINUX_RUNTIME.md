@@ -15,11 +15,25 @@ pentru instalarea sau dezinstalarea manuală a bazei; **Repară** apare când
 verificarea nu a reușit. Verificarea ulterioară păstrează pachetele instalate.
 Nu sunt necesare Termux, copierea comenzilor sau o aplicație companion.
 
-Utilitare opționale: **Python**, **Node.js și npm**, **Git**, **ripgrep** și
-**Blender CLI**. Ele se descarcă din depozitele Debian la acțiunea explicită
-de instalare. Sunt marcate instalate după verificarea executabilului. Baza
-Linux este verificată înaintea activării comenzilor agentului. Verificarea
-versiunii Blender nu dovedește încă modelare/randare în APK.
+Utilitare opționale: **Python**, **Node.js și npm**, **Git** și **ripgrep**.
+Ele se pregătesc din pachetele semnate din APK la acțiunea explicită; nu se
+descarcă din depozite Debian. Python/Git/ripgrep vin din repository-ul Debian
+offline, iar Node.js/npm din runtime-ul Node 22.19 inclus pentru Agent AI. Sunt
+marcate pregătite după verificarea executabilului. Baza Linux este verificată
+înaintea activării comenzilor agentului.
+
+**Blender CLI 4.3.2** nu mai este un utilitar opțional descărcat: pachetele
+Debian ARM64 și dependențele sale sunt în arhiva offline din APK. Integrări →
+Blender sau `blender_prepare` le instalează local, fără Termux și fără rețea.
+`blender_status` citește versiunea reală, iar `blender_run` execută un script
+Python din proiect prin PRoot cu proiectul montat la `/workspace`. Pachetul este
+mare (aproximativ 291 MB în arhiva de test și 800 MB adăugați la instalare),
+astfel încât pregătirea inițială durează. Verificarea versiunii nu dovedește
+singură randarea; probele GLB, render și import Godot sunt separate.
+
+Probele locale din 3.11.2026 au instalat repository-ul offline cu `Need to get
+0 B`, au randat Cycles CPU și au importat GLB-ul în Godot. Sunt dovezi pentru
+lanțul Debian/PRoot/Blender, nu pentru APK-ul Android instalat.
 
 Runtime-ul oferă o bază pentru CLI-uri și harness-uri bazate pe Node/Python.
 Nu înlocuiește automat harness-ul existent al agentului. Autentificarea,
@@ -46,9 +60,16 @@ extern instalat, autentificat și validat în Godot.
 - JNI injectează proiectul real deschis; modelul nu alege directorul gazdă.
   Linux vede proiectul la `/workspace`. Comenzile primesc un mediu controlat,
   fără cheile furnizorilor AI copiate automat din seiful aplicației.
-- `linux_status`, `linux_execute` și `linux_install_tool` folosesc catalogul și
-  permisiunile existente. Execuția este o operație externă: modul Plan nu o
-  autorizează. Instrumentele active sunt oferite numai după verificarea Linux.
+- Cache-ul Debian temporar și arhivele apt sunt șterse după instalarea reușită;
+  o reparare le extrage din nou din APK.
+- `AIMemoryGuard` verifică memoria liberă înainte de pregătirea pachetelor,
+  pornirea Agent AI/Ziva și rularea Blender. Joburile rămân seriale, iar Ziva
+  așteaptă terminarea pregătirii Linux. Aceste limite reduc vârfurile de memorie,
+  dar nu înlocuiesc managerul de memorie al Android.
+- `linux_status` și `linux_execute` folosesc catalogul și permisiunile existente.
+  Python, Node.js/npm, Git, ripgrep și Blender se pregătesc automat, pe rând,
+  din pachetele semnate în APK. Execuția este o operație externă: modul Plan nu
+  o autorizează. Instrumentele active sunt oferite numai după verificarea Linux.
 - La trecerea din lista de proiecte în editor, pregătirea automată continuă
   în serviciu; noul panou urmărește jobul existent. Comenzile agentului nu
   sunt relansate automat. Dezinstalarea bazei rămâne doar o operație internă

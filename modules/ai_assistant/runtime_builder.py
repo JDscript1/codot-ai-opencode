@@ -1,7 +1,55 @@
 """Embed editor scripts; they never depend on, or get copied into, a game project."""
+
 from pathlib import Path
 
-SCRIPT_BINDINGS = {'common': 'Common', 'engineering_store': 'EngineeringStore', 'qa_scenarios': 'QAScenarios', 'asset_audit': 'AssetAudit', 'experiments': 'Experiments', 'engineering': 'Engineering', 'project_knowledge': 'ProjectKnowledge', 'diagnostics': 'Diagnostics', 'verification': 'Verification', 'diff': 'Diff', 'change_set': 'ChangeSet', 'transport': 'Transport', 'tool_registry': 'ToolRegistry', 'model_pricing': 'ModelPricing', 'providers': 'Providers', 'panel_reader': 'PanelReader', 'editor_tools': 'Tools', 'mcp': 'MCP', 'asset_exports': 'AssetExports', 'generation_catalog': 'GenerationCatalog', 'assets': 'Assets', 'accounts': 'Accounts', 'conversations': 'Conversations', 'icons': 'Icons', 'planner': 'Planner', 'markdown': 'Markdown', 'tool_preview': 'ToolPreview', 'diagram': 'Diagram', 'file_registry': 'FileRegistry', 'model_preview': 'ModelPreview', 'media_view': 'MediaView', 'chat_view': 'ChatView', 'harness': 'Harness', 'agent_jobs': 'AgentJobs', 'speech': 'Speech', 'workspace': 'Workspace', 'termux_blender': 'TermuxBlender', 'linux_runtime': 'LinuxRuntime', 'ziva': 'Ziva', 'ziva_screen': 'ZivaScreen', 'integrations': 'Integrations', 'store': 'Store', 'editor_control': 'EditorControl', 'panel': 'Panel'}
+SCRIPT_BINDINGS = {
+    "common": "Common",
+    "engineering_store": "EngineeringStore",
+    "qa_scenarios": "QAScenarios",
+    "asset_audit": "AssetAudit",
+    "experiments": "Experiments",
+    "engineering": "Engineering",
+    "project_knowledge": "ProjectKnowledge",
+    "diagnostics": "Diagnostics",
+    "verification": "Verification",
+    "diff": "Diff",
+    "change_set": "ChangeSet",
+    "transport": "Transport",
+    "tool_registry": "ToolRegistry",
+    "model_pricing": "ModelPricing",
+    "providers": "Providers",
+    "panel_reader": "PanelReader",
+    "editor_tools": "Tools",
+    "mcp": "MCP",
+    "asset_exports": "AssetExports",
+    "generation_catalog": "GenerationCatalog",
+    "assets": "Assets",
+    "accounts": "Accounts",
+    "conversations": "Conversations",
+    "icons": "Icons",
+    "planner": "Planner",
+    "markdown": "Markdown",
+    "tool_preview": "ToolPreview",
+    "diagram": "Diagram",
+    "file_registry": "FileRegistry",
+    "model_preview": "ModelPreview",
+    "media_view": "MediaView",
+    "chat_view": "ChatView",
+    "harness": "Harness",
+    "agent_jobs": "AgentJobs",
+    "speech": "Speech",
+    "workspace": "Workspace",
+    "termux_blender": "TermuxBlender",
+    "linux_runtime": "LinuxRuntime",
+    "ziva": "Ziva",
+    "ziva_screen": "ZivaScreen",
+    "integrations": "Integrations",
+    "store": "Store",
+    "editor_control": "EditorControl",
+    "godot_mcp": "GodotMCP",
+    "pi_session": "PiSession",
+    "panel": "Panel",
+}
 SCRIPT_NAMES = list(SCRIPT_BINDINGS)
 
 
@@ -11,7 +59,7 @@ def embed(target, source, env):
         data = Path(str(file)).read_bytes()
         lines.append(f"static const unsigned char ai_script_{name}[] = {{")
         for start in range(0, len(data), 32):
-            lines.append(",".join(str(n) for n in data[start:start + 32]) + ",")
+            lines.append(",".join(str(n) for n in data[start : start + 32]) + ",")
         lines.append("0};")
     lines.append("struct AIScriptSource { const char *name; const char *binding; const unsigned char *data; };")
     lines.append("static const AIScriptSource ai_script_sources[] = {")

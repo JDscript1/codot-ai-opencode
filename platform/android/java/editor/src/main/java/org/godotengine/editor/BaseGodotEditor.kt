@@ -293,6 +293,7 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 	}
 
 	override fun onDestroy() {
+		AIPiRuntime.release(this)
 		AIZivaRuntime.release(this)
 		AIZivaWindow.release(this)
 		AIMicrophonePermission.release(this)

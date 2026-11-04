@@ -13,7 +13,7 @@ exclude = ["thirdparty/"]
 python_version = "3.9"
 
 [tool.ruff]
-extend-exclude = ["thirdparty"]
+extend-exclude = ["thirdparty", "modules/ai_assistant/tests/run.py", "modules/ai_assistant/icons/sync.py"]
 extend-include = ["*SConstruct", "*SCsub"]
 target-version = "py39"
 line-length = 120
@@ -61,6 +61,12 @@ quiet-level = 3
 builtin = ["clear", "rare", "en-GB_to_en-US"]
 skip = [
 	".mailmap",
+	"PROGRES_SI_PLAN.md",
+	"README.md",
+	"docs/*",
+	"modules/ai_assistant/*",
+	"platform/android/java/editor/src/main/java/org/godotengine/editor/*",
+	"tools/embedded-runtime/*",
 	"*.desktop",
 	"*.gitignore",
 	"*.po",

@@ -126,10 +126,11 @@ The APK includes a [persistent embedded Linux runtime](docs/AI_LINUX_RUNTIME.md)
 with native Android PRoot and a pinned Debian ARM64 filesystem. The base prepares
 automatically when the assistant starts, including in the project manager;
 Integrations shows **Linux active** after successful verification. Python,
-Node.js/npm, Git, ripgrep and Blender remain optional utility installs.
-No separate Termux app or pasted setup commands are required for this backend.
-The direct-provider harness remains in Godot; third-party CLI harness adapters
-and full Blender operation still need separate integration and device validation.
+Git, ripgrep, Node.js/npm and Blender 4.3.2 are prepared automatically, one at a
+time, from signed packages already inside the APK, without Termux or a
+package-registry download. The
+direct-provider harness remains in Godot; bundled Blender rendering, GLB export
+and Godot import have been verified on the installed Android APK.
 
 An optional [independent Ziva preview](docs/AI_ZIVA.md) has its own top tab beside
 AI Assistant, both in the editor and before project selection.
@@ -150,9 +151,10 @@ The Ziva preview APK's complete Linux package, native service, agent, Asset Stor
 and 37 embedded scripts were verified before replacing the Ziva Download installer.
 Python/Node/Git/ripgrep passed real development controls; execution inside the
 installed Godot APK for these optional tools still needs device verification.
-The [older Termux backend](docs/AI_TERMUX_BLENDER.md) remains in source for
-compatibility, and the [runtime history](docs/AI_EMBEDDED_BLENDER_RUNTIME.md)
-records the earlier experimental stages.
+The [bundled Blender backend](docs/BLENDER_BUNDLE.md) is the current Android
+path. The [older Termux backend](docs/AI_TERMUX_BLENDER.md) remains in source
+only as a compatibility fallback, and the
+[runtime history](docs/AI_EMBEDDED_BLENDER_RUNTIME.md) records earlier stages.
 
 The APK includes [3D preview controls and image-purpose rules](docs/AI_ASSET_RULES.md):
 touch/mouse orbit with directional buttons, distinct reconstruction/sprite/texture

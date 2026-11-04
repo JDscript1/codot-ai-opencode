@@ -1,5 +1,10 @@
 # Blender în Integrări, prin Termux
 
+> **Legacy / fallback.** În sursele curente, Blender 4.3.2 este inclus în APK
+> și rulează prin runtime-ul Linux al aplicației. Documentul de față descrie
+> conectorul Termux păstrat numai pentru APK-uri fără backend-ul bundled. Vezi
+> [Blender inclus în APK](BLENDER_BUNDLE.md) pentru fluxul curent.
+
 Inclus în APK-ul Android ARM64 `5baf890`, livrat la 25 octombrie 2026.
 Clasele Android, permisiunea, intrarea JNI, cele 27 scripturi și worker-ul inclus
 au fost verificate în pachet. Harness-ul AI rulează în Godot; Termux și Python

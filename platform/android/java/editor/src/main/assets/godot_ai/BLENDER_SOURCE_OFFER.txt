@@ -1,0 +1,14 @@
+Blender is bundled as Debian package version 4.3.2+dfsg-2 for arm64.
+
+License: GNU General Public License, version 2 or later. The complete package
+copyright and license text is installed in the application Linux runtime at
+/usr/share/doc/blender/copyright.
+
+Corresponding source for this exact Debian version:
+https://deb.debian.org/debian/pool/main/b/blender/blender_4.3.2+dfsg-2.dsc
+https://deb.debian.org/debian/pool/main/b/blender/blender_4.3.2+dfsg.orig.tar.xz
+https://deb.debian.org/debian/pool/main/b/blender/blender_4.3.2+dfsg-2.debian.tar.xz
+
+The Debian source package includes the upstream source and Debian patches used
+to build the bundled ARM64 binaries. Anyone redistributing this APK must keep
+this notice and make the corresponding source available under the GPL.

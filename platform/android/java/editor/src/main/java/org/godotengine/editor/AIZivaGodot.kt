@@ -38,19 +38,6 @@ class AIZivaGodot(private val root: File, private val spec: Release = RELEASE) {
         check(installed() && AILinuxRuntimeFiles.sha(binary) == spec.binaryHash) { "Godot pentru Ziva este absent sau corupt. Reinstalează Ziva." }
     }
 
-    fun install(cache: File, cancelled: () -> Boolean, progress: (String) -> Unit) {
-        check(cache.isDirectory || cache.mkdirs())
-        val needed = spec.archiveSize + spec.binarySize + (if (directory.exists()) spec.binarySize else 0L) + 48L * 1024 * 1024
-        check(root.usableSpace >= needed) { "Sunt necesari aproximativ ${needed / (1024 * 1024)} MB liberi pentru Godot." }
-        val archive = File(cache, "godot-${UUID.randomUUID()}.zip")
-        try {
-            progress("Descarc Godot 4.7.2 Linux ARM64…")
-            AIDownload.fetch(spec.url, spec.archiveSize, archive, cancelled, progress, "Godot")
-            progress("Verific Godot…")
-            extract(archive, cancelled)
-        } finally { archive.delete() }
-    }
-
     fun extract(archive: File, cancelled: () -> Boolean = { false }) {
         check(archive.length() == spec.archiveSize && AILinuxRuntimeFiles.sha(archive) == spec.archiveHash) { "Verificarea SHA-256 Godot a eșuat." }
         val target = directory
