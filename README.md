@@ -126,11 +126,10 @@ The APK includes a [persistent embedded Linux runtime](docs/AI_LINUX_RUNTIME.md)
 with native Android PRoot and a pinned Debian ARM64 filesystem. The base prepares
 automatically when the assistant starts, including in the project manager;
 Integrations shows **Linux active** after successful verification. Python,
-Node.js/npm, Git and ripgrep remain optional utility installs. Blender 4.3.2
-ARM64 is packaged in the APK and is prepared from the same signed offline
-Debian repository, without Termux or a later download. The direct-provider
-harness remains in Godot; bundled Blender execution still needs installed-APK
-device validation.
+Git, ripgrep, Node.js/npm and Blender 4.3.2 are prepared from signed packages
+already inside the APK, without Termux or a package-registry download. The
+direct-provider harness remains in Godot; bundled Blender rendering, GLB export
+and Godot import have been verified on the installed Android APK.
 
 An optional [independent Ziva preview](docs/AI_ZIVA.md) has its own top tab beside
 AI Assistant, both in the editor and before project selection.

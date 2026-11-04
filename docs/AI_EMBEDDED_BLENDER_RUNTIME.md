@@ -28,9 +28,10 @@ Agent AI live, Eevee/GPU sau performanța pe telefon.
 Ambele APK-uri AG-91 au fost construite de CI și verificate local; conțin
 Blender, numpy, repository-ul offline și oferta de surse. APK-urile din Download
 au fost înlocuite, iar vechile instalatoare au fost păstrate în
-`~/godot-ai-artifacts/ag91-previous-download/`. Instalarea pe telefon nu a fost
-posibilă: ADB nu are dispozitiv conectat, iar certificatul debug efemer diferă
-de aplicația deja instalată.
+`~/godot-ai-artifacts/ag91-previous-download/`. Ulterior, distribuția Ziva a
+fost instalată pe telefon, iar proba prin PRoot-ul aplicației a confirmat
+Blender 4.3.2, randarea Cycles, GLB-ul și importul în Godot Linux din APK.
+Controlul prin chat-ul Agent AI și upgrade-ul cu altă cheie debug rămân separat.
 
 ## Etapa 1: proba de executare
 

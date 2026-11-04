@@ -68,6 +68,22 @@ class BundledBlenderTests(unittest.TestCase):
         self.assertIn('.put("blender", JSONObject()', source)
         self.assertIn("2684354560L", source)
 
+    def test_bundled_tools_install_without_network(self):
+        files = LINUX_FILES.read_text()
+        runtime = LINUX_RUNTIME.read_text()
+        packages = PACKAGE_MANAGER.read_text()
+        self.assertIn("/root/.local/node_modules/node/bin:/root/.local/node_modules/.bin", files)
+        self.assertIn('"/root/.local/node_modules/node/bin/node", "--version"', files)
+        self.assertIn('listOf("/bin/sh", "-c", command)', files)
+        self.assertNotIn("preparePackageNetwork", runtime)
+        self.assertNotIn("runtime.installTool", runtime)
+        self.assertIn("AIPackageManager.installDebian", runtime)
+        self.assertIn("AIPackageManager.installPi", runtime)
+        self.assertIn("AIPackageManager.piInstalled", runtime)
+        self.assertIn("internal fun piInstalled", packages)
+        panel = PANEL.read_text()
+        self.assertIn('button.text = "Pregătit" if ready else "Pregătește"', panel)
+
 
 if __name__ == "__main__":
     unittest.main()

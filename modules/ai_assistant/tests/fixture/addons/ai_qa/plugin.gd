@@ -4141,9 +4141,9 @@ func _linux_runtime_tests(output: String) -> void:
 	_check(bridge.requests[0]["action"] == "prepare" and not form["primary"].visible, "Linux prepares automatically and hides recovery controls after success")
 	_check(panel.integration_settings.get("linux_enabled", false) and not form["buttons"]["python"].disabled, "Verified runtime becomes available for optional Python installation")
 	await panel._linux_setup("tool_install", "python")
-	_check(form["buttons"]["python"].text == "Instalat" and form["buttons"]["python"].disabled and not form["buttons"]["node"].disabled, "Tool installation reflects measured capability without claiming other tools are installed")
+	_check(form["buttons"]["python"].text == "Pregătit" and form["buttons"]["python"].disabled and not form["buttons"]["node"].disabled, "Tool preparation reflects measured capability without claiming other tools are installed")
 	await backend.ensure_ready()
-	_check(form["buttons"]["python"].text == "Instalat" and backend.available(), "Automatic startup verification preserves installed optional utilities")
+	_check(form["buttons"]["python"].text == "Pregătit" and backend.available(), "Automatic startup verification preserves prepared optional utilities")
 	if not output.is_empty():
 		await get_tree().create_timer(0.2).timeout
 		var page = panel.settings_tabs.get_tab_control(panel.section_tabs["integrations"])
@@ -4170,7 +4170,7 @@ func _linux_runtime_tests(output: String) -> void:
 	backend.refresh()
 	_check(form["primary"].visible and form["primary"].text == "Repară", "A runtime requiring verification offers recovery without deleting tools")
 	await panel._linux_setup("prepare")
-	_check(backend.available() and form["buttons"]["python"].text == "Instalat", "Runtime recovery preserves optional utilities")
+	_check(backend.available() and form["buttons"]["python"].text == "Pregătit", "Runtime recovery preserves optional utilities")
 	panel.mode_picker.select(old_mode)
 	panel.full_control.button_pressed = old_yolo
 	panel.active_definitions = old_definitions

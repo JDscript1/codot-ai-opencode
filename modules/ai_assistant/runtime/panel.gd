@@ -6617,9 +6617,9 @@ func _build_linux_runtime(parent: Node) -> void:
 		var label = _label(row, entry[1])
 		label.autowrap_mode = TextServer.AUTOWRAP_OFF
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var button = _button(row, "Instalează", func() -> void: _linux_setup("tool_install", entry[0]))
+		var button = _button(row, "Pregătește", func() -> void: _linux_setup("tool_install", entry[0]))
 		form["buttons"][entry[0]] = button
-	form["hint"] = _label(card, "Linux se pregătește automat. Adaugă doar uneltele de care ai nevoie.")
+	form["hint"] = _label(card, "Utilitarele se pregătesc din pachetele semnate din APK; nu se descarcă de pe internet.")
 	integrations.linux.refresh()
 	_refresh_linux_card()
 
@@ -6638,7 +6638,7 @@ func _refresh_linux_card() -> void:
 	for key in form["buttons"]:
 		var button: Button = form["buttons"][key]
 		var ready = bool(state.get("tools", {}).get(key, {}).get("ready", false))
-		button.text = "Instalat" if ready else "Instalează"
+		button.text = "Pregătit" if ready else "Pregătește"
 		button.disabled = busy or runtime.working or not runtime.available() or ready
 		button.tooltip_text = str(state.get("tools", {}).get(key, {}).get("version", ""))
 	if runtime.available() and not integration_settings.get("linux_enabled", false):

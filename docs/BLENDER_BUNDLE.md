@@ -118,5 +118,22 @@ Download au fost înlocuite atomic; cele vechi sunt în
 
 Cheile de semnare din acest build sunt debug efemere și diferă de aplicația
 instalată anterior. Upgrade-ul in-place necesită keystore-ul persistent sau
-dezinstalarea aplicației; nu s-a dezinstalat nimic. Instalarea pe telefon și
-controlul live prin Agent AI rămân neefectuate.
+dezinstalarea aplicației; nu s-a dezinstalat nimic. Instalarea pe telefon a fost
+confirmată ulterior; controlul live prin Agent AI rămâne separat.
+
+## Probă pe telefon — 4 noiembrie 2026
+
+Distribuția Ziva este instalată pe `NX729J-UN` și folosește assetul Debian
+`3106ed065b52ceba1f2aeba06827ef610f2d3eb6f3b13c9535e2ef0b6d8fc1cd`, identic cu
+APK-ul AG-91. Starea runtime-ului raportează Blender 4.3.2 cu Python disponibil.
+
+Prin PRoot-ul aplicației instalate:
+
+- randarea Cycles CPU 8 samples a produs un PNG RGBA 64×64;
+- exportul a produs GLB, `.blend` și metadate;
+- Godot 4.7.2 Linux ARM64 din APK a importat GLB-ul cu un mesh;
+- imaginea a fost extrasă din spațiul privat și inspectată vizual.
+
+Comanda directă a folosit proiectul montat la `/workspace` și aceleași variabile
+`GODOT_AI_*`, `XDG_*` și Blender ca backend-ul aplicației. Proba confirmă
+lanțul complet pe Android; controlul prin chat-ul Agent AI rămâne separat.

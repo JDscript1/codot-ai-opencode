@@ -197,6 +197,52 @@ dispozitiv conectat. Certificatele APK-urilor noi sunt chei debug efemere,
 diferite de aplicația deja instalată; actualizarea in-place cere keystore-ul
 persistent sau dezinstalare. Nu am dezinstalat nimic. Termux rămâne neatins.
 
+## AG-92 — utilitare pregătite exclusiv din APK — 4.11.2026
+
+**Diagnostic pe dispozitiv.** Endpointul ADB `10.146.52.179:42707` a răspuns
+(`NX729J-UN`, Android 15, arm64). Este instalată distribuția Ziva
+`com.jdscript.godotai.ziva.debug`, actualizată la 10:10. Assetul Debian din
+runtime are hash-ul `3106ed065b52ceba1f2aeba06827ef610f2d3eb6f3b13c9535e2ef0b6d8fc1cd`,
+identic cu APK-ul AG-91. Starea runtime-ului confirmă `Blender 4.3.2`,
+`python: true`, iar binarul are 79.271.136 bytes.
+
+**Cauza logurilor de rețea.** Joburile `4629f936…`, `9019258e…` și
+`5f54238e…` au fost `tool_install`, nu actualizarea pachetelor. Înainte ca
+`AIPackageManager` să instaleze setul offline, codul vechi pentru butoanele
+Node/Git/ripgrep rula `preparePackageNetwork` și `runtime.installTool`, care
+foloseau `deb.debian.org`. Astfel au intrat Node.js 20.19.2, Git și ripgrep
+prin rețea. După instalarea Agent AI, markerul Debian și Blender au fost
+instalate corect din APK. Blender nu a fost descărcat prin aceste joburi.
+
+**Corectat în surse.**
+
+- `AILinuxRuntime` nu mai are `preparePackageNetwork`; `tool_install` nu mai
+  folosește `runtime.installTool`.
+- Butoanele Node/Git/ripgrep/Python pregătesc exclusiv pachetele semnate:
+  Debian din repository-ul offline, iar Node.js/npm din runtime-ul Node 22.19
+  al Agent AI (`AIPackageManager.installPi` + `piInstalled`).
+- `PATH`-ul PRoot pune acum primul
+  `/root/.local/node_modules/node/bin`; `node --version` și `npm --version` din
+  același PRoot au dat `v22.19.0` și `10.9.3`.
+- `linux_execute` folosește `/bin/sh -c`, nu `-lc`, ca să nu reseteze PATH-ul
+  controlat al runtime-ului.
+- Proba Node folosește calea absolută a runtime-ului bundled, nu `/usr/bin/node`.
+- Etichetele UI sunt **Pregătește**/**Pregătit**, iar ajutorul spune explicit că
+  pachetele vin din APK și nu se descarcă.
+
+**Probă reală pe telefon.** Prin PRoot-ul APK-ului instalat:
+
+- `Blender 4.3.2` a randat Cycles CPU 8 samples, PNG RGBA 64×64;
+- a exportat `probe.glb` (1.9 KB), `probe.blend` (431 KB) și `probe.json`;
+- Godot 4.7.2 Linux ARM64 din APK a importat GLB-ul:
+  `GODOT_GLB_IMPORT_OK meshes=1`;
+- imaginea randată a fost extrasă și inspectată vizual; cubul este prezent.
+
+**Teste sursă.** Testele Blender bundled au trecut; suita Godot a rămas la
+**1.040 assertions, 0 failures**. Corecția necesită un APK nou; buildul și
+instalarea lui peste aplicația existentă sunt următorul pas. Semnătura debug
+efemeră rămâne o limitare separată.
+
 ## AG-89 — pachete runtime incluse în APK și actualizare offline — 3.11.2026
 
 **Cerință.** Mediul minim să fie pregătit în APK, să nu mai fie descărcat la

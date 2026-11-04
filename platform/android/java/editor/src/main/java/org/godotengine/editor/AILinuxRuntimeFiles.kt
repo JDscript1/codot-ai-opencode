@@ -33,7 +33,8 @@ class AILinuxRuntimeFiles(
             "git" to listOf("git", "ca-certificates"),
             "ripgrep" to listOf("ripgrep"),
         )
-        val TOOL_PROBES = mapOf("python" to listOf("python3", "--version"), "node" to listOf("node", "--version"),
+        val TOOL_PROBES = mapOf("python" to listOf("python3", "--version"),
+            "node" to listOf("/root/.local/node_modules/node/bin/node", "--version"),
             "git" to listOf("git", "--version"), "ripgrep" to listOf("rg", "--version"),
             "blender" to listOf("blender", "--background", "--factory-startup", "--version"))
 
@@ -346,7 +347,7 @@ class AILinuxRuntimeFiles(
         val state = state(); state.put("ready", true).put("verified_at", System.currentTimeMillis())
         val tools = JSONObject()
         for ((name, command) in TOOL_PROBES) {
-            if (!File(root, "usr/bin/" + command[0]).exists()) continue
+            if (!toolBinary(command[0]).exists()) continue
             val probe = launch(command, null, 30)
             if (probe.getInt("exit_code") == 0) tools.put(name, JSONObject().put("ready", true).put("version", probe.getString("output").lineSequence().firstOrNull().orEmpty().take(160)))
         }
@@ -382,8 +383,11 @@ class AILinuxRuntimeFiles(
         require(command.isNotBlank() && command.length <= 16000 && !command.contains('\u0000')) { "Comandă invalidă." }
         check(state().optBoolean("ready")) { "Runtime Linux indisponibil." }
         check(project.isAbsolute && project.isDirectory && File(project, "project.godot").isFile && !project.path.contains(':')) { "Proiect Godot invalid." }
-        return launch(listOf("/bin/sh", "-lc", command), project.canonicalFile, seconds.coerceIn(1, 600))
+        return launch(listOf("/bin/sh", "-c", command), project.canonicalFile, seconds.coerceIn(1, 600))
     }
+
+    private fun toolBinary(command: String): File =
+        if (command.startsWith("/")) File(root, command.trimStart('/')) else File(root, "usr/bin/$command")
 
     fun blenderStatus(): JSONObject {
         val binary = File(root, "usr/bin/blender")
@@ -546,7 +550,7 @@ class AILinuxRuntimeFiles(
         val loader = File(nativeDirectory, "libai_proot_loader.so")
         val scratch = File(base, "tmp").apply { mkdirs() }
         val environment = linkedMapOf(
-            "PATH" to "/root/.local/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "PATH" to "/root/.local/node_modules/node/bin:/root/.local/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             "HOME" to "/root", "USER" to "root", "LANG" to "C.UTF-8",
             "TMPDIR" to "/tmp", "ANDROID_ROOT" to "/system", "ANDROID_DATA" to "/data", "PROOT_LOADER" to loader.absolutePath,
             "PROOT_TMP_DIR" to scratch.absolutePath, "DEBIAN_FRONTEND" to "noninteractive")

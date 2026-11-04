@@ -227,6 +227,17 @@ object AIPackageManager {
         } finally { AILinuxRuntimeFiles.deleteTree(cache) }
     }
 
+    internal fun piInstalled(runtime: AILinuxRuntimeFiles, manifest: JSONObject): Boolean {
+        val expected = manifest.getJSONObject("pi").optString("version")
+        val version = try {
+            JSONObject(File(runtime.root, "root/.local/node_modules/@earendil-works/pi-coding-agent/package.json").readText())
+                .optString("version")
+        } catch (_: Exception) { "" }
+        val node = File(runtime.root, PI_NODE)
+        val cli = File(runtime.root, PI_CLI)
+        return expected.isNotEmpty() && version == expected && node.isFile && node.length() > 1_000_000 && cli.isFile
+    }
+
     internal fun ensureZivaDependencies(context: Context, runtime: AILinuxRuntimeFiles, manifest: JSONObject,
         ziva: AIZivaPackage, cancelled: () -> Boolean, progress: (String) -> Unit) {
         installDebian(context, runtime, manifest, cancelled, progress)

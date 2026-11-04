@@ -152,7 +152,7 @@ Status: **D/P**.
 
 ### Etapa 1 — Blender CLI în APK, nativ aplicației
 
-Status: **D/T — implementat, testat local și compilat în ambele APK-uri; proba pe telefon rămâne**.
+Status: **D/T — implementat, testat local și verificat pe telefon prin PRoot-ul APK-ului**.
 
 - `blender` 4.3.2+dfsg-2 este în lista Debian a repository-ului offline din APK.
   Buildul local selectează 377 de pachete; `debian-offline.zip` are
@@ -171,8 +171,9 @@ Status: **D/T — implementat, testat local și compilat în ambele APK-uri; pro
 - Acceptare: Blender pornește offline, versiunea este reală, un script minim
   creează un GLB importabil, o randare produce o imagine, iar uneltele Pi pot
   executa fluxul fără Termux. Primele patru condiții au trecut local, iar
-  APK-urile standard/Ziva au trecut build-ul și verificarea conținutului.
-  Controlul prin Pi/APK-ul instalat pe telefon nu a fost încă validat.
+  APK-urile standard/Ziva au trecut build-ul și verificarea conținutului, iar
+  randarea/GLB/importul au trecut pe telefon. Controlul prin chat-ul Agent AI
+  rămâne de validat separat.
 
 ### Etapa 2 — pipeline unificat de asseturi
 

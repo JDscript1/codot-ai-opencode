@@ -16,8 +16,10 @@ verificarea nu a reușit. Verificarea ulterioară păstrează pachetele instalat
 Nu sunt necesare Termux, copierea comenzilor sau o aplicație companion.
 
 Utilitare opționale: **Python**, **Node.js și npm**, **Git** și **ripgrep**.
-Ele se descarcă din depozitele Debian la acțiunea explicită de instalare. Sunt
-marcate instalate după verificarea executabilului. Baza Linux este verificată
+Ele se pregătesc din pachetele semnate din APK la acțiunea explicită; nu se
+descarcă din depozite Debian. Python/Git/ripgrep vin din repository-ul Debian
+offline, iar Node.js/npm din runtime-ul Node 22.19 inclus pentru Agent AI. Sunt
+marcate pregătite după verificarea executabilului. Baza Linux este verificată
 înaintea activării comenzilor agentului.
 
 **Blender CLI 4.3.2** nu mai este un utilitar opțional descărcat: pachetele

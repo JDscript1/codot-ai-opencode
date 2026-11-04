@@ -31,24 +31,6 @@ object AILinuxRuntime {
             val network = context.getSystemService(ConnectivityManager::class.java)
             synchronizeDns(network.getLinkProperties(network.activeNetwork)?.dnsServers?.mapNotNull { it.hostAddress }.orEmpty())
         }
-    internal fun preparePackageNetwork(context: Context, runtime: AILinuxRuntimeFiles) {
-        val connectivity = context.getSystemService(ConnectivityManager::class.java)
-        val network = connectivity.activeNetwork
-        fun resolve(host: String): List<String> = try {
-            val addresses = if (network != null) network.getAllByName(host).toList()
-                else java.net.InetAddress.getAllByName(host).toList()
-            val ipv4 = addresses.filterIsInstance<java.net.Inet4Address>()
-            (if (ipv4.isNotEmpty()) ipv4 else addresses).mapNotNull { it.hostAddress }
-        } catch (_: Exception) {
-            emptyList()
-        }
-        val hosts = linkedMapOf(
-            "deb.debian.org" to resolve("deb.debian.org"),
-            "registry.npmjs.org" to resolve("registry.npmjs.org")
-        ).filterValues { it.isNotEmpty() }
-        check(hosts.isNotEmpty()) { "Nu pot pregăti descărcarea: telefonul nu are internet sau DNS-ul nu răspunde." }
-        runtime.synchronizeHosts(hosts)
-    }
     private fun failure(message: String, code: String = "runtime_error") = JSONObject().put("ok", false).put("error", message).put("code", code)
 
     internal fun packageJob(context: Context): String {
@@ -117,7 +99,10 @@ object AILinuxRuntime {
                     val active = active(current)
                     if (action == "prepare" && active.isNotEmpty()) return JSONObject().put("ok", true).put("id", active).put("status", "running").toString()
                     check(active.isEmpty()) { "O sarcină Linux este deja în lucru." }
-                    if (action == "tool_install") check(AILinuxRuntimeFiles.TOOL_PACKAGES.containsKey(arguments.getString("tool"))) { "Utilitar necunoscut." }
+                    if (action == "tool_install") {
+                        check(AILinuxRuntimeFiles.TOOL_PACKAGES.containsKey(arguments.getString("tool"))) { "Utilitar necunoscut." }
+                        check(!AIPiRuntime.isBusy()) { "Oprește sesiunea Agent AI înainte de pregătirea utilitarelor." }
+                    }
                     if (action == "execute") {
                         val command = arguments.getString("command")
                         check(command.isNotBlank() && command.length <= 16000 && !command.contains('\u0000')) { "Comandă invalidă." }
@@ -234,6 +219,14 @@ class AILinuxRuntimeService : Service() {
             job.put("output", output.toString()).put("heartbeat", System.currentTimeMillis())
             AILinuxRuntimeFiles.writeJson(file, job)
         } }
+        fun report(text: String) {
+            synchronized(lock) {
+                output.append(text).append('\n')
+                if (output.length > AILinuxRuntimeFiles.MAX_LOG) { output.delete(0, output.length - AILinuxRuntimeFiles.MAX_LOG); job.put("truncated", true) }
+                save()
+            }
+            getSystemService(NotificationManager::class.java).notify(7342, notification(text))
+        }
         val timer = heartbeat.scheduleAtFixedRate({ try { save() } catch (_: Exception) {} }, 0, 2, TimeUnit.SECONDS)
         val cancelFile = File(file.parentFile, "$id.cancel")
         val runtime = AILinuxRuntime.core(this, { cancelled.get() || cancelFile.exists() }) { text -> synchronized(lock) {
@@ -253,18 +246,23 @@ class AILinuxRuntimeService : Service() {
                     else { runtime.install(dns); runtime.state() }
                 }
                 "verify" -> runtime.verify()
-                "tool_install" -> { AILinuxRuntime.preparePackageNetwork(this, runtime); runtime.installTool(args.getString("tool")) }
+                "tool_install" -> {
+                    val packages = AIPackageManager.manifest(this)
+                    val tool = args.getString("tool")
+                    if (tool == "node") {
+                        if (!AIPackageManager.piInstalled(runtime, packages)) {
+                            AIPackageManager.installPi(this, runtime, packages, { cancelled.get() || cancelFile.exists() }, { report(it) })
+                        }
+                    } else {
+                        AIPackageManager.installDebian(this, runtime, packages, { cancelled.get() || cancelFile.exists() }, { report(it) })
+                    }
+                    val verified = runtime.verify()
+                    check(verified.getJSONObject("tools").has(tool)) { "Utilitarul $tool nu a trecut verificarea după pregătire." }
+                }
                 "execute" -> runtime.execute(args.getString("command"), File(args.getString("project_directory")), args.optInt("seconds", 120))
                 "blender_run" -> runtime.blenderRun(File(args.getString("project_directory")), args, args.optInt("seconds", 300))
                 "uninstall" -> { runtime.uninstall(); runtime.state() }
-                "packages_update" -> AIPackageManager.update(this, runtime, { cancelled.get() || cancelFile.exists() }) { text ->
-                    synchronized(lock) {
-                        output.append(text).append('\n')
-                        if (output.length > AILinuxRuntimeFiles.MAX_LOG) { output.delete(0, output.length - AILinuxRuntimeFiles.MAX_LOG); job.put("truncated", true) }
-                        save()
-                    }
-                    getSystemService(NotificationManager::class.java).notify(7342, notification(text))
-                }
+                "packages_update" -> AIPackageManager.update(this, runtime, { cancelled.get() || cancelFile.exists() }, { report(it) })
                 else -> error("Operație Linux necunoscută.")
             }
             synchronized(lock) { job.put("status", "completed").put("result", result) }
