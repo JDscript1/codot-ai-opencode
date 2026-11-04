@@ -88,13 +88,15 @@ class BundledBlenderTests(unittest.TestCase):
         self.assertNotIn("installTool", files)
         self.assertNotIn("TOOL_PACKAGES", files)
         self.assertNotIn("tool_install", runtime)
-        self.assertTrue((ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIMemoryGuard.kt").is_file())
+        self.assertTrue(
+            (ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIMemoryGuard.kt").is_file()
+        )
         updates = ZIVA_UPDATES.read_text()
         self.assertNotIn("HttpURLConnection", updates)
         self.assertNotIn("https://api.github.com", updates)
         panel = PANEL.read_text()
-        self.assertIn("form[\"statuses\"]", panel)
-        self.assertNotIn("form[\"buttons\"]", panel)
+        self.assertIn('form["statuses"]', panel)
+        self.assertNotIn('form["buttons"]', panel)
         linux = LINUX_GD.read_text()
         self.assertNotIn('Common.tool("linux_install_tool"', linux)
 

@@ -62,6 +62,7 @@ builtin = ["clear", "rare", "en-GB_to_en-US"]
 skip = [
 	".mailmap",
 	"PROGRES_SI_PLAN.md",
+	"README.md",
 	"docs/*",
 	"modules/ai_assistant/*",
 	"platform/android/java/editor/src/main/java/org/godotengine/editor/*",
