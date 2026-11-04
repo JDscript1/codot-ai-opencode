@@ -105,12 +105,11 @@ object AIZivaRuntime {
     }
     private fun reconcile(activity: Activity) {
         if (owners.isEmpty()) return
-        if (AILinuxRuntime.packageJob(activity).isNotEmpty()) return
+        if (AILinuxRuntime.hasActiveJob(activity)) return
         val target = owners[activity]?.takeIf { it.isNotEmpty() } ?: owners.values.firstOrNull { it.isNotEmpty() }.orEmpty()
         if (target != project) { project = target; attempts = 0; pending = 0 }
         val runtime = AILinuxRuntime.core(activity)
         if (!runtime.state().optBoolean("ready")) {
-            if (AILinuxRuntime.packageJob(activity).isNotEmpty()) return
             if (prepareJob.isNotEmpty()) {
                 val job = JSONObject(AILinuxRuntime.command("poll", JSONObject().put("id", prepareJob).toString()))
                 if (job.optString("status") in listOf("queued", "running")) return
@@ -186,10 +185,10 @@ object AIZivaRuntime {
             } }
         } else if (action in listOf("ziva_install", "ziva_update", "ziva_restart")) {
             val target = args.optString("project_directory")
-            val release = if (action == "ziva_update") AIZivaUpdates.available(context) else null
+            check(!AILinuxRuntime.hasActiveJob(context)) { "Runtime-ul Linux se pregătește. Reîncearcă după finalizarea pachetelor." }
             handler.post { synchronized(this) {
                 attempts = 0; prepareAttempts = 0
-                try { send(context, if (action == "ziva_restart") "ziva_start" else "ziva_install", target, release) }
+                try { send(context, if (action == "ziva_restart") "ziva_start" else "ziva_install", target) }
                 catch (error: Exception) {
                     val failed = read(context).put("status", "error").put("message", error.message?.take(240))
                     save(context, failed)

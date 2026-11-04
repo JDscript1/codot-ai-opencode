@@ -11,6 +11,14 @@ a fost reluat după un segfault Godot în randarea UI și a trecut. Instalarea p
 telefon și proba live Ziva rămân neefectuate; certificatul debug este efemer și
 diferă de aplicația deja instalată.
 
+**Pachete locale — 4.11.2026.** Runtime-ul Linux pregătește automat, într-un
+singur job serial, Python, Node.js 22.19/npm, Git, ripgrep și Blender din
+pachetele semnate în APK. Instalarea Ziva refolosește setul Debian deja
+pregătit și extrage apoi addon-ul, CEF-ul și Godot tot din APK. Nu mai există
+butoane individuale de descărcare; `ziva_check_updates` și `ziva_update` sunt
+locale, iar o versiune Ziva nouă se livrează printr-un APK nou. Operațiile grele
+sunt refuzate când memoria liberă este sub limita de siguranță.
+
 ## Delegare către agentul Ziva — 31.10.2026
 
 Agentul nostru poate cere oficialului Ziva o sarcină de sine stătătoare, prin

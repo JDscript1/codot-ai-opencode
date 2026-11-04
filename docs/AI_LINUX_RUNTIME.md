@@ -60,9 +60,16 @@ extern instalat, autentificat și validat în Godot.
 - JNI injectează proiectul real deschis; modelul nu alege directorul gazdă.
   Linux vede proiectul la `/workspace`. Comenzile primesc un mediu controlat,
   fără cheile furnizorilor AI copiate automat din seiful aplicației.
-- `linux_status`, `linux_execute` și `linux_install_tool` folosesc catalogul și
-  permisiunile existente. Execuția este o operație externă: modul Plan nu o
-  autorizează. Instrumentele active sunt oferite numai după verificarea Linux.
+- Cache-ul Debian temporar și arhivele apt sunt șterse după instalarea reușită;
+  o reparare le extrage din nou din APK.
+- `AIMemoryGuard` verifică memoria liberă înainte de pregătirea pachetelor,
+  pornirea Agent AI/Ziva și rularea Blender. Joburile rămân seriale, iar Ziva
+  așteaptă terminarea pregătirii Linux. Aceste limite reduc vârfurile de memorie,
+  dar nu înlocuiesc managerul de memorie al Android.
+- `linux_status` și `linux_execute` folosesc catalogul și permisiunile existente.
+  Python, Node.js/npm, Git, ripgrep și Blender se pregătesc automat, pe rând,
+  din pachetele semnate în APK. Execuția este o operație externă: modul Plan nu
+  o autorizează. Instrumentele active sunt oferite numai după verificarea Linux.
 - La trecerea din lista de proiecte în editor, pregătirea automată continuă
   în serviciu; noul panou urmărește jobul existent. Comenzile agentului nu
   sunt relansate automat. Dezinstalarea bazei rămâne doar o operație internă

@@ -122,6 +122,8 @@ class AIZivaService : Service() {
         var heartbeat: ScheduledFuture<*>? = null
         try {
             check(!cancelled()) { "Operație anulată." }
+            AIMemoryGuard.ensure(this, if (action == "ziva_install") 512 else 768,
+                if (action == "ziva_install") "instalarea Ziva" else "pornirea Ziva")
             heartbeat = timer.scheduleAtFixedRate({ synchronized(lock) {
                 try { AIZivaRuntime.save(this, state) } catch (_: Exception) { }
             } }, 0, 2, TimeUnit.SECONDS)
@@ -150,7 +152,9 @@ class AIZivaService : Service() {
                 update("installing", "Instalez componentele Debian din APK…")
                 AIPackageManager.installDebian(this, runtime, packages, ::cancelled) { update("installing", it) }
                 update("installing", "Extrag Node.js, Pi, Ziva și Godot din APK…")
-                AIPackageManager.installPi(this, runtime, packages, ::cancelled) { update("installing", it) }
+                if (!AIPackageManager.piInstalled(runtime, packages)) {
+                    AIPackageManager.installPi(this, runtime, packages, ::cancelled) { update("installing", it) }
+                }
                 AIPackageManager.installZiva(this, runtime, packages, ::cancelled) { update("installing", it) }
                 check(!cancelled()) { "Operație anulată." }
                 runtime.verify()

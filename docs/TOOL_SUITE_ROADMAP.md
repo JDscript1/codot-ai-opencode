@@ -70,7 +70,8 @@ reflectată, nu doar uneltele cu nume fix.
 - `store_search`, `store_describe`, `store_install`, `store_remove`
 - `plugin_enable`
 - `github_read`, `github_create_issue`
-- `linux_status`, `linux_execute`, `linux_install_tool`
+- `linux_status`, `linux_execute`; utilitarele Python, Node.js/npm, Git, ripgrep
+  și Blender se instalează automat din pachetele APK
 
 ### 1.6. Agent, planificare și memorie
 

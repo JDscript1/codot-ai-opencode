@@ -52,6 +52,8 @@ object AILinuxRuntime {
         return ""
     }
 
+    internal fun hasActiveJob(context: Context): Boolean = active(context).isNotEmpty()
+
     @JvmStatic @Synchronized fun command(action: String, text: String): String {
         val current = context ?: return failure("Editorul Android nu este activ.").toString()
         if (Build.VERSION.SDK_INT < 29 || !Build.SUPPORTED_ABIS.contains("arm64-v8a")) return failure("Runtime Linux necesită Android 10+ ARM64.", "unsupported_platform").toString()
@@ -94,15 +96,11 @@ object AILinuxRuntime {
                     recoverStale(job, file)
                     job.put("ok", true).toString()
                 }
-                "prepare", "install", "verify", "tool_install", "execute", "blender_run", "uninstall" -> {
-                    if (action in listOf("install", "tool_install", "uninstall")) check(!AIZivaRuntime.isBusy(current)) { "Oprește Ziva înainte de modificarea runtime-ului Linux." }
+                "prepare", "install", "verify", "execute", "blender_run", "uninstall" -> {
+                    if (action in listOf("install", "uninstall")) check(!AIZivaRuntime.isBusy(current)) { "Oprește Ziva înainte de modificarea runtime-ului Linux." }
                     val active = active(current)
                     if (action == "prepare" && active.isNotEmpty()) return JSONObject().put("ok", true).put("id", active).put("status", "running").toString()
                     check(active.isEmpty()) { "O sarcină Linux este deja în lucru." }
-                    if (action == "tool_install") {
-                        check(AILinuxRuntimeFiles.TOOL_PACKAGES.containsKey(arguments.getString("tool"))) { "Utilitar necunoscut." }
-                        check(!AIPiRuntime.isBusy()) { "Oprește sesiunea Agent AI înainte de pregătirea utilitarelor." }
-                    }
                     if (action == "execute") {
                         val command = arguments.getString("command")
                         check(command.isNotBlank() && command.length <= 16000 && !command.contains('\u0000')) { "Comandă invalidă." }
@@ -236,29 +234,30 @@ class AILinuxRuntimeService : Service() {
         } }
         try {
             check(job.optString("id") == id && job.optString("status") == "queued") { "Sarcină Linux invalidă." }
+            val kind = job.getString("kind")
+            if (kind in setOf("prepare", "install", "packages_update")) {
+                AIMemoryGuard.ensure(this, 512, "pregătirea pachetelor runtime")
+            } else if (kind == "blender_run") {
+                AIMemoryGuard.ensure(this, 512, "rularea Blender")
+            }
             synchronized(lock) { job.put("status", "running").put("pid", Process.myPid()); save() }
             val args = job.getJSONObject("arguments")
-            val result = when (job.getString("kind")) {
+            val result = when (kind) {
                 "prepare", "install" -> {
                     val network = getSystemService(ConnectivityManager::class.java)
                     val dns = network.getLinkProperties(network.activeNetwork)?.dnsServers?.mapNotNull { it.hostAddress }.orEmpty()
                     if (job.getString("kind") == "prepare" && runtime.state().optBoolean("installed")) runtime.verify()
                     else { runtime.install(dns); runtime.state() }
+                    val packages = AIPackageManager.manifest(this)
+                    report("Pregătesc pachetele Debian și Blender din APK…")
+                    AIPackageManager.installDebian(this, runtime, packages, { cancelled.get() || cancelFile.exists() }, { report(it) })
+                    if (!AIPackageManager.piInstalled(runtime, packages)) {
+                        report("Pregătesc Node.js 22.19 și Agent AI din APK…")
+                        AIPackageManager.installPi(this, runtime, packages, { cancelled.get() || cancelFile.exists() }, { report(it) })
+                    }
+                    runtime.verify()
                 }
                 "verify" -> runtime.verify()
-                "tool_install" -> {
-                    val packages = AIPackageManager.manifest(this)
-                    val tool = args.getString("tool")
-                    if (tool == "node") {
-                        if (!AIPackageManager.piInstalled(runtime, packages)) {
-                            AIPackageManager.installPi(this, runtime, packages, { cancelled.get() || cancelFile.exists() }, { report(it) })
-                        }
-                    } else {
-                        AIPackageManager.installDebian(this, runtime, packages, { cancelled.get() || cancelFile.exists() }, { report(it) })
-                    }
-                    val verified = runtime.verify()
-                    check(verified.getJSONObject("tools").has(tool)) { "Utilitarul $tool nu a trecut verificarea după pregătire." }
-                }
                 "execute" -> runtime.execute(args.getString("command"), File(args.getString("project_directory")), args.optInt("seconds", 120))
                 "blender_run" -> runtime.blenderRun(File(args.getString("project_directory")), args, args.optInt("seconds", 300))
                 "uninstall" -> { runtime.uninstall(); runtime.state() }

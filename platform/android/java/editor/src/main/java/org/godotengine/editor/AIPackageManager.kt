@@ -142,7 +142,7 @@ object AIPackageManager {
             "Spațiu insuficient pentru pachetele Debian și Blender: sunt necesari aproximativ 2,5 GB liberi."
         }
         progress("Pregătesc repository-ul Debian offline…")
-        extractDebianArchive(context, runtime, manifest, cancelled, progress)
+        val repository = extractDebianArchive(context, runtime, manifest, cancelled, progress)
         val packages = spec.getJSONArray("packages")
         val names = mutableListOf<String>()
         for (index in 0 until packages.length()) {
@@ -172,12 +172,20 @@ object AIPackageManager {
             .put("suite", spec.optString("suite"))
             .put("packages", JSONArray(names))
             .put("installed_at", System.currentTimeMillis()))
+        progress("Eliberez cache-ul Debian temporar…")
+        AILinuxRuntimeFiles.deleteTree(repository)
+        AILinuxRuntimeFiles.deleteTree(File(runtime.root, "var/cache/apt/archives"))
+        AILinuxRuntimeFiles.deleteTree(File(runtime.root, "var/lib/apt/lists/godot-ai-empty"))
+        File(runtime.root, "etc/apt/sources.list.d/godot-ai-offline.list").delete()
         progress("Pachetele Debian au fost instalate din APK.")
     }
 
     internal fun installPi(context: Context, runtime: AILinuxRuntimeFiles, manifest: JSONObject,
         cancelled: () -> Boolean, progress: (String) -> Unit) {
         check(runtime.state().optBoolean("ready")) { "Runtime-ul Linux nu este pregătit." }
+        check(runtime.root.usableSpace >= 512L * 1024 * 1024) {
+            "Spațiu insuficient pentru Node.js și Agent AI: sunt necesari aproximativ 512 MB liberi."
+        }
         val node = manifest.getJSONObject("node")
         val pi = manifest.getJSONObject("pi")
         val nodeDir = node.getString("guest_directory")

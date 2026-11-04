@@ -216,19 +216,27 @@ instalate corect din APK. Blender nu a fost descărcat prin aceste joburi.
 
 **Corectat în surse.**
 
-- `AILinuxRuntime` nu mai are `preparePackageNetwork`; `tool_install` nu mai
-  folosește `runtime.installTool`.
-- Butoanele Node/Git/ripgrep/Python pregătesc exclusiv pachetele semnate:
-  Debian din repository-ul offline, iar Node.js/npm din runtime-ul Node 22.19
-  al Agent AI (`AIPackageManager.installPi` + `piInstalled`).
+- `AILinuxRuntime` nu mai are `preparePackageNetwork`, `installTool` sau
+  `TOOL_PACKAGES`; `linux_install_tool` a fost eliminat din catalogul agentului
+  și din interfață. Integrări afișează numai starea, fără butoane de descărcare.
+- `prepare` instalează automat, într-un singur job serial, repository-ul Debian
+  offline (inclusiv Blender), apoi Node.js/Pi din APK. Ziva nu pornește cât timp
+  jobul Linux este activ.
+- Instalarea Ziva folosește același set Debian deja pregătit, sare peste Pi dacă
+  este instalat și extrage addon-ul/runtime-ul Ziva plus Godot din APK.
+- `ziva_check_updates` și `ziva_update` nu mai accesează GitHub. Verificarea este
+  locală, iar butonul reinstalează exclusiv pachetele din APK.
 - `PATH`-ul PRoot pune acum primul
   `/root/.local/node_modules/node/bin`; `node --version` și `npm --version` din
   același PRoot au dat `v22.19.0` și `10.9.3`.
 - `linux_execute` folosește `/bin/sh -c`, nu `-lc`, ca să nu reseteze PATH-ul
   controlat al runtime-ului.
 - Proba Node folosește calea absolută a runtime-ului bundled, nu `/usr/bin/node`.
-- Etichetele UI sunt **Pregătește**/**Pregătit**, iar ajutorul spune explicit că
-  pachetele vin din APK și nu se descarcă.
+- Cache-ul Debian temporar și arhivele apt sunt șterse după instalarea reușită;
+  o reparare le extrage din nou din APK.
+- `AIMemoryGuard` refuză operațiile grele când Android raportează memorie
+  insuficientă: 512 MB pentru pachete/Blender/Agent AI și 768 MB pentru Ziva.
+  Joburile Linux rămân seriale, iar Agent AI/Ziva așteaptă terminarea pregătirii.
 
 **Probă reală pe telefon.** Prin PRoot-ul APK-ului instalat:
 
@@ -239,9 +247,11 @@ instalate corect din APK. Blender nu a fost descărcat prin aceste joburi.
 - imaginea randată a fost extrasă și inspectată vizual; cubul este prezent.
 
 **Teste sursă.** Testele Blender bundled au trecut; suita Godot a rămas la
-**1.040 assertions, 0 failures**. Corecția necesită un APK nou; buildul și
-instalarea lui peste aplicația existentă sunt următorul pas. Semnătura debug
-efemeră rămâne o limitare separată.
+**1.040 assertions, 0 failures**, iar testele Python la **53/53**. Corecția
+necesită un APK nou; utilizatorul a cerut oprirea compilării până la stabilirea
+cerințelor. Nu s-a pornit un build nou după această cerere și nu s-a înlocuit
+Download. Cheia de semnare stabilă a fost configurată ca secret GitHub, dar
+instalarea peste aplicația actuală cere o singură dezinstalare.
 
 ## AG-89 — pachete runtime incluse în APK și actualizare offline — 3.11.2026
 

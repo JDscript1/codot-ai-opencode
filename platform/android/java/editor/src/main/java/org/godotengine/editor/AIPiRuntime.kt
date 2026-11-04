@@ -304,6 +304,8 @@ object AIPiRuntime {
         if (!installed(context)) return failure("Agent AI nu este instalat.", "not_installed")
         val runtime = AILinuxRuntime.core(context)
         if (!runtime.state().optBoolean("ready")) return failure("Runtime-ul Linux nu este pregătit.", "linux_not_ready")
+        if (AILinuxRuntime.hasActiveJob(context)) return failure("Runtime-ul Linux se pregătește. Reîncearcă după finalizarea pachetelor.", "linux_busy")
+        AIMemoryGuard.ensure(context, 512, "pornirea Agent AI")
         val project = File(arguments.optString("project_directory"))
         check(project.isAbsolute && File(project, "project.godot").isFile && !project.path.contains(':')) { "Proiect Godot invalid." }
         val port = arguments.optInt("mcp_port", 0)

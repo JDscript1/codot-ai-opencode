@@ -7,8 +7,10 @@ citește numai arhivele semnate din APK și nu contactează Debian, npm sau Term
 
 ## Flux
 
-1. **Setări → Actualizare pachete** sau **Integrări → Blender → Pregătește din
-   APK** pornește un job Linux foreground, anulabil.
+1. Pregătirea automată a runtime-ului Linux pornește un singur job foreground,
+   anulabil, care instalează pe rând pachetele Debian, Blender și Node/Pi.
+   **Setări → Actualizare pachete** reface același set din APK atunci când este
+   necesar.
 2. Jobul verifică hash-urile arhivei, extrage repository-ul apt local și
    instalează pachetele cu `apt-get` folosind exclusiv sursa `file:`.
 3. `AILinuxRuntimeFiles.verify()` rulează `blender --background

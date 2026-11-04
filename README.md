@@ -126,8 +126,9 @@ The APK includes a [persistent embedded Linux runtime](docs/AI_LINUX_RUNTIME.md)
 with native Android PRoot and a pinned Debian ARM64 filesystem. The base prepares
 automatically when the assistant starts, including in the project manager;
 Integrations shows **Linux active** after successful verification. Python,
-Git, ripgrep, Node.js/npm and Blender 4.3.2 are prepared from signed packages
-already inside the APK, without Termux or a package-registry download. The
+Git, ripgrep, Node.js/npm and Blender 4.3.2 are prepared automatically, one at a
+time, from signed packages already inside the APK, without Termux or a
+package-registry download. The
 direct-provider harness remains in Godot; bundled Blender rendering, GLB export
 and Godot import have been verified on the installed Android APK.
 

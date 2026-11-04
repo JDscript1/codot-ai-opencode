@@ -3936,10 +3936,14 @@ class FixtureLinuxBridge:
 			if fail: return {"ok": true, "status": "failed", "error": "Verificarea runtime a eșuat.", "output": "diagnostic fixture"}
 			var result = {}
 			match str(pending.get("action", "")):
-				"prepare", "install", "verify": state.merge({"installed": true, "ready": true}, true); result = state.duplicate(true)
-				"tool_install":
-					state["tools"][pending["args"]["tool"]] = {"ready": true, "version": "fixture 1.0"}
-					result = state.duplicate(true)
+				"prepare", "install", "verify":
+					state.merge({"installed": true, "ready": true, "tools": {
+						"python": {"ready": true, "version": "Python 3.13.5"},
+						"node": {"ready": true, "version": "v22.19.0"},
+						"git": {"ready": true, "version": "git version 2.47.3"},
+						"ripgrep": {"ready": true, "version": "ripgrep 14.1.1"},
+						"blender": {"ready": true, "version": "Blender 4.3.2", "python": true},
+					}}, true); result = state.duplicate(true)
 				"execute": result = {"exit_code": 0, "output": "LINUX_FIXTURE_OK", "truncated": false}
 				"uninstall": state.merge({"installed": false, "ready": false, "tools": {}}, true); result = state.duplicate(true)
 			return {"ok": true, "status": "completed", "result": result}
@@ -4139,11 +4143,10 @@ func _linux_runtime_tests(output: String) -> void:
 	await backend.ensure_ready()
 	_check(backend.available() and form["status"].text == "Linux activ" and form["tools"].visible, "Only a completed and verified Linux job enables the runtime and its utility controls")
 	_check(bridge.requests[0]["action"] == "prepare" and not form["primary"].visible, "Linux prepares automatically and hides recovery controls after success")
-	_check(panel.integration_settings.get("linux_enabled", false) and not form["buttons"]["python"].disabled, "Verified runtime becomes available for optional Python installation")
-	await panel._linux_setup("tool_install", "python")
-	_check(form["buttons"]["python"].text == "Pregătit" and form["buttons"]["python"].disabled and not form["buttons"]["node"].disabled, "Tool preparation reflects measured capability without claiming other tools are installed")
+	_check(panel.integration_settings.get("linux_enabled", false) and not form.has("buttons"), "Verified runtime exposes automatic package status without manual install controls")
+	_check(form["statuses"]["python"].text.begins_with("Pregătit") and form["statuses"]["blender"].text.begins_with("Pregătit"), "Automatic preparation reports Python and Blender as ready after the bundled job")
 	await backend.ensure_ready()
-	_check(form["buttons"]["python"].text == "Pregătit" and backend.available(), "Automatic startup verification preserves prepared optional utilities")
+	_check(form["statuses"]["python"].text.begins_with("Pregătit") and backend.available(), "Automatic startup verification preserves prepared utilities")
 	if not output.is_empty():
 		await get_tree().create_timer(0.2).timeout
 		var page = panel.settings_tabs.get_tab_control(panel.section_tabs["integrations"])
@@ -4170,7 +4173,7 @@ func _linux_runtime_tests(output: String) -> void:
 	backend.refresh()
 	_check(form["primary"].visible and form["primary"].text == "Repară", "A runtime requiring verification offers recovery without deleting tools")
 	await panel._linux_setup("prepare")
-	_check(backend.available() and form["buttons"]["python"].text == "Pregătit", "Runtime recovery preserves optional utilities")
+	_check(backend.available() and form["statuses"]["python"].text.begins_with("Pregătit"), "Runtime recovery preserves prepared utilities")
 	panel.mode_picker.select(old_mode)
 	panel.full_control.button_pressed = old_yolo
 	panel.active_definitions = old_definitions

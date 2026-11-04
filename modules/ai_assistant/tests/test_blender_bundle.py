@@ -12,6 +12,7 @@ INTEGRATIONS = ROOT / "modules/ai_assistant/runtime/integrations.gd"
 LINUX_GD = ROOT / "modules/ai_assistant/runtime/linux_runtime.gd"
 PANEL = ROOT / "modules/ai_assistant/runtime/panel.gd"
 PI_RUNTIME = ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIPiRuntime.kt"
+ZIVA_UPDATES = ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIZivaUpdates.kt"
 
 
 class BundledBlenderTests(unittest.TestCase):
@@ -59,7 +60,6 @@ class BundledBlenderTests(unittest.TestCase):
         self.assertIn("Pregătește din APK", panel)
         self.assertIn("integrations.linux.install_blender({})", panel)
         self.assertIn("integrations.bundled_blender_ready()", panel)
-        self.assertNotIn('["blender", "Blender CLI"]', panel)
 
     def test_package_status_requires_a_verified_blender(self):
         source = PACKAGE_MANAGER.read_text()
@@ -81,8 +81,22 @@ class BundledBlenderTests(unittest.TestCase):
         self.assertIn("AIPackageManager.installPi", runtime)
         self.assertIn("AIPackageManager.piInstalled", runtime)
         self.assertIn("internal fun piInstalled", packages)
+        self.assertIn("AIMemoryGuard.ensure", runtime)
+        self.assertIn("hasActiveJob", runtime)
+        self.assertIn("Pregătesc pachetele Debian și Blender din APK", runtime)
+        self.assertIn("if (!AIPackageManager.piInstalled(runtime, packages))", runtime)
+        self.assertNotIn("installTool", files)
+        self.assertNotIn("TOOL_PACKAGES", files)
+        self.assertNotIn("tool_install", runtime)
+        self.assertTrue((ROOT / "platform/android/java/editor/src/main/java/org/godotengine/editor/AIMemoryGuard.kt").is_file())
+        updates = ZIVA_UPDATES.read_text()
+        self.assertNotIn("HttpURLConnection", updates)
+        self.assertNotIn("https://api.github.com", updates)
         panel = PANEL.read_text()
-        self.assertIn('button.text = "Pregătit" if ready else "Pregătește"', panel)
+        self.assertIn("form[\"statuses\"]", panel)
+        self.assertNotIn("form[\"buttons\"]", panel)
+        linux = LINUX_GD.read_text()
+        self.assertNotIn('Common.tool("linux_install_tool"', linux)
 
 
 if __name__ == "__main__":

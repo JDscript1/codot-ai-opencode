@@ -3638,7 +3638,6 @@ func _execute_call(name: String, args: Dictionary, external: bool = false) -> Di
 		result["project_changes"] = observed
 		_record_event("linux_project_changes", {}, observed)
 		_update_changes()
-	elif name == "linux_install_tool": result = await integrations.linux.setup("tool_install", str(args["tool"]))
 	elif name == "blender_status": result = integrations.linux.blender_status()
 	elif name == "blender_prepare": result = await integrations.linux.install_blender(cancel)
 	elif name == "blender_run":
@@ -5825,7 +5824,7 @@ func _agent_definitions() -> Array:
 		Common.tool("ziva_stop", "Stop the independent Ziva session without changing its files or settings.", {}, [], "external"),
 		Common.tool("ziva_restart", "Restart Ziva for the current project, preserving its own sessions and configuration.", {}, [], "external"),
 		Common.tool("ziva_install", "Install or repair the official Ziva addon/runtime and its offline runtime dependencies.", {}, [], "external"),
-		Common.tool("ziva_update", "Update Ziva from the packaged runtime after checking the available official version.", {}, [], "external"),
+		Common.tool("ziva_update", "Reinstall Ziva from the signed packages bundled in this APK. No network update is performed; a newer Ziva version requires a new APK.", {}, [], "external"),
 		Common.tool("ziva_task", "Hand a self-contained task to the official Ziva agent. It works in the same Godot project through its own tools in a dedicated 'Godot AI' chat. Ziva never sees this conversation: include every path, requirement and acceptance criterion. The call waits until Ziva answers or asks for permission. Use ziva_task_result for a long answer.", {"prompt": Common.string_field(), "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 1800}}, ["prompt"], "external"),
 		Common.tool("ziva_task_poll", "Resume waiting for a Ziva delegation after its permission or question was answered, either by the user in the Ziva tab or by the permission/question tools.", {"job_id": Common.string_field(), "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 1800}}, ["job_id"]),
 		Common.tool("ziva_task_cancel", "Cancel a delegated Ziva task and its active turn.", {"job_id": Common.string_field()}, ["job_id"], "external"),
@@ -6610,16 +6609,17 @@ func _build_linux_runtime(parent: Node) -> void:
 	form["cancel"] = _button(actions, "Oprește", func() -> void: integrations.linux.stop())
 	form["tools"] = VBoxContainer.new()
 	card.add_child(form["tools"])
-	form["buttons"] = {}
-	for entry in [["python", "Python"], ["node", "Node.js · npm"], ["git", "Git"], ["ripgrep", "ripgrep"]]:
+	form["statuses"] = {}
+	for entry in [["python", "Python"], ["node", "Node.js · npm"], ["git", "Git"], ["ripgrep", "ripgrep"], ["blender", "Blender CLI"]]:
 		var row = HBoxContainer.new()
 		form["tools"].add_child(row)
 		var label = _label(row, entry[1])
 		label.autowrap_mode = TextServer.AUTOWRAP_OFF
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var button = _button(row, "Pregătește", func() -> void: _linux_setup("tool_install", entry[0]))
-		form["buttons"][entry[0]] = button
-	form["hint"] = _label(card, "Utilitarele se pregătesc din pachetele semnate din APK; nu se descarcă de pe internet.")
+		var value = _label(row, "Se pregătește automat")
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		form["statuses"][entry[0]] = value
+	form["hint"] = _label(card, "Toate utilitarele sunt în APK și se instalează automat, pe rând. Nu se descarcă de pe internet.")
 	integrations.linux.refresh()
 	_refresh_linux_card()
 
@@ -6635,19 +6635,18 @@ func _refresh_linux_card() -> void:
 	form["primary"].disabled = busy or runtime.working or not supported
 	form["cancel"].visible = runtime.working
 	form["tools"].visible = installed
-	for key in form["buttons"]:
-		var button: Button = form["buttons"][key]
-		var ready = bool(state.get("tools", {}).get(key, {}).get("ready", false))
-		button.text = "Pregătit" if ready else "Pregătește"
-		button.disabled = busy or runtime.working or not runtime.available() or ready
-		button.tooltip_text = str(state.get("tools", {}).get(key, {}).get("version", ""))
+	for key in form["statuses"]:
+		var tool = state.get("tools", {}).get(key, {}) if state.get("tools", {}) is Dictionary else {}
+		var ready = bool(tool.get("ready", false))
+		var version = str(tool.get("version", "")).get_slice("\n", 0)
+		form["statuses"][key].text = ("Pregătit · " + version) if ready and not version.is_empty() else ("Pregătit" if ready else "Se pregătește automat")
 	if runtime.available() and not integration_settings.get("linux_enabled", false):
 		integration_settings["linux_enabled"] = true
 		Common.atomic_json(project_directory.path_join("integrations.json"), integration_settings)
 
-func _linux_setup(action: String, tool: String = "") -> void:
+func _linux_setup(action: String) -> void:
 	if busy or integrations.linux.working: return
-	var result = await integrations.linux.setup(action, tool)
+	var result = await integrations.linux.setup(action)
 	_status("Linux pregătit." if result.get("ok", false) and action != "uninstall" else ("Linux dezinstalat." if result.get("ok", false) else str(result.get("error", "Sarcina Linux nu s-a finalizat."))))
 	_refresh_linux_card()
 

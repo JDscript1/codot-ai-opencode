@@ -27,12 +27,6 @@ class AILinuxRuntimeFiles(
     companion object {
         const val MAX_LOG = 131072
         private const val BLENDER_PYTHON_MARKER = "GODOT_AI_BLENDER_PYTHON_OK"
-        val TOOL_PACKAGES = linkedMapOf(
-            "python" to listOf("python3", "python3-venv", "python3-pip", "ca-certificates"),
-            "node" to listOf("nodejs", "npm", "ca-certificates"),
-            "git" to listOf("git", "ca-certificates"),
-            "ripgrep" to listOf("ripgrep"),
-        )
         val TOOL_PROBES = mapOf("python" to listOf("python3", "--version"),
             "node" to listOf("/root/.local/node_modules/node/bin/node", "--version"),
             "git" to listOf("git", "--version"), "ripgrep" to listOf("rg", "--version"),
@@ -361,22 +355,6 @@ class AILinuxRuntimeFiles(
         state.put("tools", tools)
         writeJson(stateFile, state)
         return state
-    }
-
-    fun installTool(name: String): JSONObject {
-        val packages = TOOL_PACKAGES[name] ?: error("Utilitar necunoscut.")
-        check(state().optBoolean("ready")) { "Instalează și verifică mai întâi Linux." }
-        if (System.currentTimeMillis() - state().optLong("apt_updated_at") > 600_000) {
-            progress("Actualizez lista de pachete…")
-            check(launch(listOf("/usr/bin/apt-get", "update"), null, 300).getInt("exit_code") == 0) { "Lista de pachete nu a putut fi actualizată." }
-            writeJson(stateFile, state().put("apt_updated_at", System.currentTimeMillis()))
-        }
-        progress("Instalez $name…")
-        check(launch(listOf("/usr/bin/apt-get", "install", "-y", "--no-install-recommends") + packages, null, 1200).getInt("exit_code") == 0) { "Instalarea $name a eșuat." }
-        launch(listOf("/usr/bin/apt-get", "clean"), null, 30)
-        val result = verify()
-        check(result.getJSONObject("tools").has(name)) { "Utilitarul instalat nu a trecut verificarea." }
-        return result
     }
 
     fun execute(command: String, project: File, seconds: Int): JSONObject {
